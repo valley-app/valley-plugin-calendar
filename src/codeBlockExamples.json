@@ -1,0 +1,46 @@
+{
+  "calendar": [
+    {
+      "id": "agenda",
+      "label": "Agenda",
+      "labelKey": "markdown.examples.agenda",
+      "code": "view-mode: agenda\nrange: this-week\nlimit: 20"
+    },
+    {
+      "id": "week",
+      "label": "Week",
+      "labelKey": "markdown.examples.week",
+      "code": "view-mode: week\nrange: this-week"
+    },
+    {
+      "id": "day",
+      "label": "Today",
+      "labelKey": "markdown.examples.day",
+      "code": "range: today"
+    },
+    {
+      "id": "nextSeven",
+      "label": "Next seven days",
+      "labelKey": "markdown.examples.nextSeven",
+      "code": "range: next-7"
+    },
+    {
+      "id": "nextThirty",
+      "label": "Next thirty days",
+      "labelKey": "markdown.examples.nextThirty",
+      "code": "range: next-30"
+    },
+    {
+      "id": "dateRange",
+      "label": "Date range",
+      "labelKey": "markdown.examples.dateRange",
+      "code": "start-date: 2026-09-01\nend-date: 2026-09-30"
+    },
+    {
+      "id": "filtered",
+      "label": "Filtered results",
+      "labelKey": "markdown.examples.filtered",
+      "code": "view-mode: week\nrange: next-30\nfilter-tag: #focus\nlimit: 10"
+    }
+  ]
+}

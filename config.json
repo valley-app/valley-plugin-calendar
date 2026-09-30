@@ -1,0 +1,999 @@
+{
+  "icon": "icon.svg",
+  "main": "runtime/index.js",
+  "noteDocuments": [
+    {
+      "id": "events",
+      "dataset": "events",
+      "idColumn": "id",
+      "titleColumn": "title",
+      "bodyColumn": "note",
+      "tags": {
+        "dataset": "event_tags",
+        "itemIdColumn": "eventId",
+        "valueColumn": "tag"
+      },
+      "sourcePathColumn": "filePath",
+      "readOnlyColumn": "readOnly",
+      "updatedAtColumn": "updatedAt",
+      "navigation": {
+        "command": "calendar:open",
+        "itemIdArg": "id"
+      },
+      "label": "Calendar",
+      "labelKey": "manifest.name",
+      "searchSourceId": "events"
+    }
+  ],
+  "uiSlots": {
+    "left_sidebar": "calendar.agenda",
+    "right_sidebar": "calendar.panel",
+    "main_workspace": "calendar.page"
+  },
+  "slotDefaults": {
+    "left_sidebar": {
+      "order": 20
+    },
+    "right_sidebar": {
+      "order": 30
+    }
+  },
+  "settingsView": "calendar.settings",
+  "settingsSections": [
+    {
+      "id": "dates",
+      "label": "Note dates",
+      "labelKey": "plugin.calendar.section.dates",
+      "icon": "calendar-days",
+      "storage": [
+        ".valley/plugins/data/calendar/",
+        ".valley/assets/icon/calendar-icon/"
+      ]
+    },
+    {
+      "id": "plugins",
+      "label": "Plugins",
+      "labelKey": "plugin.calendar.section.plugins",
+      "icon": "blocks",
+      "storage": [
+        ".valley/plugins/data/calendar/config.json"
+      ]
+    }
+  ],
+  "datasets": [
+    {
+      "id": "calendars",
+      "store": "durable",
+      "version": 1,
+      "title": "Calendars",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "text"
+        },
+        "name": {
+          "type": "text"
+        },
+        "provider": {
+          "type": "text",
+          "nullable": true
+        },
+        "providerId": {
+          "type": "text",
+          "nullable": true
+        },
+        "accountId": {
+          "type": "text",
+          "nullable": true
+        },
+        "timezone": {
+          "type": "text",
+          "nullable": true
+        },
+        "color": {
+          "type": "text",
+          "nullable": true
+        },
+        "readOnly": {
+          "type": "boolean",
+          "nullable": true
+        }
+      },
+      "visibility": "shared",
+      "titleKey": "auto.9444501818e6"
+    },
+    {
+      "id": "events",
+      "store": "durable",
+      "version": 2,
+      "title": "Events",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "text"
+        },
+        "calendarId": {
+          "type": "text",
+          "nullable": true
+        },
+        "providerId": {
+          "type": "text",
+          "nullable": true
+        },
+        "title": {
+          "type": "text"
+        },
+        "date": {
+          "type": "text"
+        },
+        "endDate": {
+          "type": "text",
+          "nullable": true
+        },
+        "startTime": {
+          "type": "text",
+          "nullable": true
+        },
+        "endTime": {
+          "type": "text",
+          "nullable": true
+        },
+        "allDay": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "timezone": {
+          "type": "text",
+          "nullable": true
+        },
+        "color": {
+          "type": "text",
+          "nullable": true
+        },
+        "category": {
+          "type": "text",
+          "nullable": true
+        },
+        "groupId": {
+          "type": "text",
+          "nullable": true
+        },
+        "group": {
+          "type": "text",
+          "nullable": true
+        },
+        "location": {
+          "type": "json",
+          "nullable": true
+        },
+        "note": {
+          "type": "text"
+        },
+        "filePath": {
+          "type": "text",
+          "nullable": true
+        },
+        "createdAt": {
+          "type": "datetime"
+        },
+        "updatedAt": {
+          "type": "datetime"
+        },
+        "source": {
+          "type": "text",
+          "nullable": true
+        },
+        "accountId": {
+          "type": "text",
+          "nullable": true
+        },
+        "readOnly": {
+          "type": "boolean",
+          "nullable": true
+        },
+        "recurrenceRule": {
+          "type": "text",
+          "nullable": true
+        },
+        "recurrenceMasterId": {
+          "type": "text",
+          "nullable": true
+        },
+        "reminderOffsets": {
+          "type": "json",
+          "nullable": true
+        },
+        "reminderTime": {
+          "type": "text",
+          "nullable": true
+        }
+      },
+      "indexes": [
+        {
+          "id": "date_range",
+          "columns": [
+            "date",
+            "endDate"
+          ]
+        },
+        {
+          "id": "provider",
+          "columns": [
+            "calendarId",
+            "providerId"
+          ],
+          "unique": true
+        },
+        {
+          "id": "file_path",
+          "columns": [
+            "filePath"
+          ]
+        }
+      ],
+      "visibility": "shared",
+      "titleKey": "auto.c5497bca5846"
+    },
+    {
+      "id": "event_tags",
+      "store": "durable",
+      "version": 1,
+      "title": "Event tags",
+      "primaryKey": [
+        "eventId",
+        "tag"
+      ],
+      "columns": {
+        "eventId": {
+          "type": "text"
+        },
+        "tag": {
+          "type": "text"
+        }
+      },
+      "relations": [
+        {
+          "kind": "foreign-key",
+          "columns": [
+            "eventId"
+          ],
+          "targetDataset": "events",
+          "targetColumns": [
+            "id"
+          ],
+          "onDelete": "cascade"
+        }
+      ],
+      "titleKey": "auto.02f17370b8d9"
+    },
+    {
+      "id": "event_links",
+      "store": "durable",
+      "version": 1,
+      "title": "Event links",
+      "primaryKey": [
+        "eventId",
+        "position"
+      ],
+      "columns": {
+        "eventId": {
+          "type": "text"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "url": {
+          "type": "text"
+        }
+      },
+      "relations": [
+        {
+          "kind": "foreign-key",
+          "columns": [
+            "eventId"
+          ],
+          "targetDataset": "events",
+          "targetColumns": [
+            "id"
+          ],
+          "onDelete": "cascade"
+        }
+      ],
+      "titleKey": "auto.5d12631f0a8b"
+    },
+    {
+      "id": "event_attachments",
+      "store": "durable",
+      "version": 1,
+      "title": "Event attachments",
+      "primaryKey": [
+        "eventId",
+        "position"
+      ],
+      "columns": {
+        "eventId": {
+          "type": "text"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "text"
+        }
+      },
+      "relations": [
+        {
+          "kind": "foreign-key",
+          "columns": [
+            "eventId"
+          ],
+          "targetDataset": "events",
+          "targetColumns": [
+            "id"
+          ],
+          "onDelete": "cascade"
+        }
+      ],
+      "titleKey": "auto.702e8114bce7"
+    },
+    {
+      "id": "recurrence_exceptions",
+      "store": "durable",
+      "version": 1,
+      "title": "Recurrence exceptions",
+      "primaryKey": [
+        "masterId",
+        "occurrenceDate"
+      ],
+      "columns": {
+        "masterId": {
+          "type": "text"
+        },
+        "occurrenceDate": {
+          "type": "text"
+        },
+        "eventId": {
+          "type": "text",
+          "nullable": true
+        },
+        "cancelled": {
+          "type": "boolean"
+        }
+      },
+      "relations": [
+        {
+          "kind": "foreign-key",
+          "columns": [
+            "masterId"
+          ],
+          "targetDataset": "events",
+          "targetColumns": [
+            "id"
+          ],
+          "onDelete": "cascade"
+        }
+      ],
+      "titleKey": "auto.3ae5b44a561f"
+    },
+    {
+      "id": "note_date_sources",
+      "store": "durable",
+      "version": 1,
+      "title": "Note date sources",
+      "primaryKey": [
+        "id"
+      ],
+      "columns": {
+        "id": {
+          "type": "text"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "definition": {
+          "type": "json"
+        }
+      },
+      "titleKey": "auto.b2db10062979"
+    },
+    {
+      "id": "sync_state",
+      "store": "cache",
+      "version": 1,
+      "title": "Calendar sync state",
+      "primaryKey": [
+        "calendarId"
+      ],
+      "columns": {
+        "calendarId": {
+          "type": "text"
+        },
+        "cursor": {
+          "type": "text",
+          "nullable": true
+        },
+        "lastSyncAt": {
+          "type": "datetime",
+          "nullable": true
+        },
+        "state": {
+          "type": "json",
+          "nullable": true
+        }
+      },
+      "titleKey": "auto.9eb56535c39a"
+    }
+  ],
+  "pathRefs": [
+    {
+      "source": "dataset",
+      "dataset": "calendar.events",
+      "pathColumn": "filePath"
+    },
+    {
+      "source": "dataset",
+      "dataset": "calendar.event_attachments",
+      "pathColumn": "path"
+    }
+  ],
+  "searchSources": [
+    {
+      "id": "events",
+      "label": "Calendar",
+      "labelKey": "manifest.name",
+      "source": "dataset",
+      "dataset": "calendar.events",
+      "tagSearch": true,
+      "fields": [
+        "title",
+        "note",
+        "location",
+        "category",
+        "tags"
+      ],
+      "joins": [
+        {
+          "dataset": "calendar.event_tags",
+          "baseColumns": [
+            "id"
+          ],
+          "relatedColumns": [
+            "eventId"
+          ],
+          "valueColumn": "tag",
+          "as": "tags"
+        }
+      ],
+      "pathField": "filePath",
+      "display": [
+        "title",
+        "note"
+      ],
+      "presentation": {
+        "titleField": "title",
+        "subtitleField": "filePath",
+        "snippetFields": [
+          "note"
+        ],
+        "tagFields": [
+          "tags"
+        ],
+        "inlineTagFields": [
+          "title",
+          "note"
+        ]
+      }
+    }
+  ],
+  "drivers": [
+    "notifications"
+  ],
+  "provides": [
+    {
+      "id": "agent.toolProvider",
+      "kind": "service",
+      "version": "1.0.0"
+    },
+    {
+      "id": "calendar.navigator",
+      "kind": "service",
+      "version": "1.0.0"
+    },
+    {
+      "id": "calendar.panelSelection",
+      "kind": "state",
+      "version": "1.0.0"
+    },
+    {
+      "id": "workspace.surface",
+      "kind": "extension",
+      "version": "1.0.0"
+    },
+    {
+      "id": "metadataPanel.segment",
+      "kind": "extension",
+      "version": "1.0.0"
+    },
+    {
+      "id": "workspace.bookmark",
+      "kind": "service",
+      "version": "1.0.0"
+    }
+  ],
+  "consumes": [
+    {
+      "id": "calendar.itemSource",
+      "kind": "service",
+      "range": "^1.0.0 || ^2.0.0",
+      "optional": true
+    },
+    {
+      "id": "calendar.itemSourceRevision",
+      "kind": "state",
+      "range": "^1.0.0",
+      "optional": true
+    },
+    {
+      "id": "geo.search",
+      "kind": "service",
+      "range": "^1.0.0",
+      "optional": true
+    },
+    {
+      "id": "geo.navigator",
+      "kind": "service",
+      "range": "^1.0.0",
+      "optional": true
+    },
+    {
+      "id": "web.navigator",
+      "kind": "service",
+      "range": "^1.0.0",
+      "optional": true
+    }
+  ],
+  "guardPresets": {
+    "schemaVersion": 1,
+    "defaultPreset": "recommended",
+    "presets": [
+      {
+        "id": "recommended",
+        "label": "Recommended",
+        "version": 1,
+        "description": "Adding events is low-risk and runs without asking.",
+        "entries": {
+          "commands": {
+            "add": {
+              "decision": "allow"
+            }
+          },
+          "tools": {
+            "add_event": {
+              "decision": "allow"
+            },
+            "list_events": {
+              "decision": "allow"
+            }
+          }
+        }
+      },
+      {
+        "id": "ask-for-writes",
+        "label": "Ask for writes",
+        "version": 1,
+        "description": "Confirm every event change.",
+        "entries": {
+          "commands": {
+            "add": {
+              "decision": "confirm",
+              "allowPreApproval": false
+            }
+          },
+          "tools": {
+            "add_event": {
+              "decision": "confirm",
+              "allowPreApproval": false
+            }
+          }
+        }
+      },
+      {
+        "id": "read-only",
+        "label": "Read-only",
+        "version": 1,
+        "description": "Browse the calendar; no edits.",
+        "entries": {
+          "commands": {
+            "add": {
+              "decision": "deny"
+            }
+          },
+          "tools": {
+            "add_event": {
+              "decision": "deny"
+            }
+          }
+        }
+      },
+      {
+        "id": "blocked",
+        "label": "Blocked",
+        "version": 1,
+        "description": "No calendar actions at all.",
+        "entries": {
+          "tools": {
+            "add_event": {
+              "decision": "deny"
+            },
+            "list_events": {
+              "decision": "deny"
+            }
+          },
+          "commands": {
+            "list": {
+              "decision": "deny"
+            },
+            "open-page": {
+              "decision": "deny"
+            },
+            "goto": {
+              "decision": "deny"
+            },
+            "today": {
+              "decision": "deny"
+            },
+            "set-view": {
+              "decision": "deny"
+            },
+            "add": {
+              "decision": "deny"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "drivesTimeControl": true,
+  "locales": {
+    "en": "runtime/locales/en.json",
+    "de": "runtime/locales/de.json",
+    "es": "runtime/locales/es.json",
+    "fr": "runtime/locales/fr.json",
+    "zh-CN": "runtime/locales/zh-CN.json"
+  },
+  "runtime": {
+    "ui": "runtime/index.js",
+    "backend": "runtime/backend.js",
+    "services": [
+      {
+        "id": "workflow.provider",
+        "version": "1.0.0",
+        "method": "workflow.execute",
+        "request": {
+          "type": "unknown"
+        },
+        "response": {
+          "type": "unknown"
+        },
+        "operation": true,
+        "events": {
+          "event.created": {
+            "type": "unknown"
+          },
+          "event.updated": {
+            "type": "unknown"
+          }
+        },
+        "metadata": {
+          "workflow": {
+            "providerId": "calendar",
+            "providerVersion": "1.0.0",
+            "nodes": [
+              {
+                "id": "event.created",
+                "type": "trigger",
+                "displayName": "Event created",
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "output",
+                    "label": "Output",
+                    "dataType": "json"
+                  }
+                ],
+                "parameterSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "required": [],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "id": "event.updated",
+                "type": "trigger",
+                "displayName": "Event updated",
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "output",
+                    "label": "Output",
+                    "dataType": "json"
+                  }
+                ],
+                "parameterSchema": {
+                  "type": "object",
+                  "properties": {},
+                  "required": [],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "id": "event.create",
+                "type": "action",
+                "displayName": "Create event",
+                "inputs": [
+                  {
+                    "id": "input",
+                    "label": "Input",
+                    "dataType": "json"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "output",
+                    "label": "Output",
+                    "dataType": "json"
+                  }
+                ],
+                "parameterSchema": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "title": "Title"
+                    },
+                    "date": {
+                      "type": "string",
+                      "title": "Date"
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "title": "End date"
+                    },
+                    "startTime": {
+                      "type": "string",
+                      "title": "Start time"
+                    },
+                    "endTime": {
+                      "type": "string",
+                      "title": "End time"
+                    },
+                    "note": {
+                      "type": "string",
+                      "title": "Notes"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "date"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "id": "event.get",
+                "type": "action",
+                "displayName": "Get event",
+                "inputs": [
+                  {
+                    "id": "input",
+                    "label": "Input",
+                    "dataType": "json"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "output",
+                    "label": "Output",
+                    "dataType": "json"
+                  }
+                ],
+                "parameterSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "title": "Event ID"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "id": "event.list",
+                "type": "action",
+                "displayName": "List events",
+                "inputs": [
+                  {
+                    "id": "input",
+                    "label": "Input",
+                    "dataType": "json"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "output",
+                    "label": "Output",
+                    "dataType": "json"
+                  }
+                ],
+                "parameterSchema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string",
+                      "title": "From date"
+                    },
+                    "to": {
+                      "type": "string",
+                      "title": "To date"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000,
+                      "default": 100,
+                      "title": "Limit"
+                    }
+                  },
+                  "required": [],
+                  "additionalProperties": false
+                }
+              },
+              {
+                "id": "event.update",
+                "type": "action",
+                "displayName": "Update event",
+                "inputs": [
+                  {
+                    "id": "input",
+                    "label": "Input",
+                    "dataType": "json"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "output",
+                    "label": "Output",
+                    "dataType": "json"
+                  }
+                ],
+                "parameterSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "title": "Event ID"
+                    },
+                    "title": {
+                      "type": "string",
+                      "title": "Title"
+                    },
+                    "date": {
+                      "type": "string",
+                      "title": "Date"
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "title": "End date"
+                    },
+                    "startTime": {
+                      "type": "string",
+                      "title": "Start time"
+                    },
+                    "endTime": {
+                      "type": "string",
+                      "title": "End time"
+                    },
+                    "note": {
+                      "type": "string",
+                      "title": "Notes"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "activation": {
+      "backend": [
+        "background",
+        "capability"
+      ]
+    }
+  },
+  "indexState": "scoped",
+  "fileViews": {
+    ".ics": {
+      "view": "calendar.file",
+      "icon": "calendar",
+      "label": "Calendar",
+      "labelKey": "manifest.name",
+      "editable": true
+    },
+    ".ifb": {
+      "view": "calendar.file",
+      "icon": "calendar",
+      "label": "Calendar",
+      "labelKey": "manifest.name",
+      "editable": true
+    },
+    ".vcs": {
+      "view": "calendar.file",
+      "icon": "calendar",
+      "label": "Calendar",
+      "labelKey": "manifest.name",
+      "editable": true
+    }
+  },
+  "permissions": {
+    "storage": {
+      "metadata": [
+        "assets/icon/calendar-icon"
+      ]
+    }
+  },
+  "notifications": [
+    {
+      "id": "reminder",
+      "label": "Event reminder",
+      "labelKey": "notification.reminder",
+      "defaultChannel": "automatic",
+      "actions": [
+        "open",
+        "snooze"
+      ]
+    }
+  ],
+  "datasetMigrations": [
+    {
+      "id": "reminder-offsets-v2",
+      "store": "durable",
+      "fromVersion": 1,
+      "toVersion": 2,
+      "steps": [
+        {
+          "operation": "add-column",
+          "dataset": "events",
+          "column": "reminderOffsets",
+          "definition": {
+            "type": "json",
+            "nullable": true
+          }
+        },
+        {
+          "operation": "add-column",
+          "dataset": "events",
+          "column": "reminderTime",
+          "definition": {
+            "type": "text",
+            "nullable": true
+          }
+        }
+      ]
+    }
+  ]
+}
