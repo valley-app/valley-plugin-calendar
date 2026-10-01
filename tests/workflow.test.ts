@@ -1,3 +1,4 @@
+import { assertCommandOutput } from './commandContracts'
 import { describe, expect, it, vi } from 'vitest'
 import { createMockValleyApi } from '@valley/plugin-testkit'
 import type { PluginBackendApi, PluginBackendOperationContext, WorkflowExecutionResult } from '@valley/plugin-sdk'
@@ -16,13 +17,13 @@ function setup() {
   const api = { index: mock.api.index, vault: mock.api.vault, notifications: { ...mock.api.notifications, onOccurrence: () => () => {} }, lifecycle: { onResume: () => () => {} }, i18n: { t: mock.api.ui.t, language: () => 'en', onLanguageChanged: () => () => {} }, pluginId: 'calendar', data: mock.api.data, documents: mock.api.documents, settings: mock.api.settings, services: { emit }, rpc: {
     emit: report,
     handle: (method: string, handler: (input: unknown) => unknown) => { handlers.set(method, handler); return () => { handlers.delete(method) } },
-    handleOperation: (method: string, handler: (input: unknown, context: PluginBackendOperationContext) => unknown) => { handlers.set(method, handler as never); return () => { handlers.delete(method) } }
+    handleOperation: (method: string, handler: (input: unknown, context: PluginBackendOperationContext) => unknown) => { handlers.set(method, async (input, context) => assertCommandOutput(method, input, await handler(input, context!))); return () => { handlers.delete(method) } }
   } } as unknown as PluginBackendApi
   const off = registerCalendarWorkflow(api)
   mock.api.backend.call = async <T>(method: string, payload?: unknown) => await handlers.get(method)!(payload) as T
-  const context = { id: 'run-action', api: { ...api, services: { emit: scopedEmit } } } as unknown as PluginBackendOperationContext
+  const context = { id: 'run-action', cancellation: new AbortController().signal, api: { ...api, services: { emit: scopedEmit } } } as unknown as PluginBackendOperationContext
   const execute = (nodeTypeId: string, parameters: Record<string, unknown> = {}) => handlers.get('workflow.execute')!({ nodeTypeId, parameters, items: [{ json: {} }] }, context) as Promise<WorkflowExecutionResult>
-  return { mock, handlers, emit, scopedEmit, report, off, execute }
+  return { mock, handlers, emit, scopedEmit, report, off, execute, context }
 }
 
 describe('Calendar workflow contribution', () => {
@@ -39,6 +40,17 @@ describe('Calendar workflow contribution', () => {
     expect(h.emit).not.toHaveBeenCalled()
     await h.off()
     expect(h.handlers.size).toBe(0)
+  })
+
+  it('deletes through the admitted owner only when the reviewed timestamp still matches', async () => {
+    const h = setup()
+    const record = (await h.execute('event.create', { title: 'Survey', date: '2026-10-01' })).items[0].json
+    const remove = (expectedUpdatedAt: string) => h.handlers.get('command.event.delete')!({ id: record.id, expectedUpdatedAt }, h.context)
+    await expect(remove('outdated')).rejects.toThrow('changed or no longer exists')
+    expect((await h.execute('event.get', { id: record.id })).items).toHaveLength(1)
+    expect(await remove(String(record.updatedAt))).toMatchObject({ id: record.id, deleted: true })
+    await expect(h.execute('event.get', { id: record.id })).rejects.toThrow('no longer exists')
+    await h.off()
   })
 
   it('rejects invalid dates, reversed times and unknown records', async () => {

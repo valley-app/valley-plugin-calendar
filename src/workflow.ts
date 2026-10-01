@@ -39,7 +39,15 @@ export function registerCalendarWorkflow(api: PluginBackendApi): () => Promise<v
       const input = payload as { id: string; record: EventRecord; expectedUpdatedAt?: string; documentRevision?: { expectedRevision: number; vaultGeneration: number } }
       return domain.update(text(input.id, 'an event id'), input.record, input.expectedUpdatedAt, input.documentRevision)
     }),
-    api.rpc.handle('records.delete', payload => domain.remove(text((payload as { id: string }).id, 'an event id')))
+    api.rpc.handle('records.delete', payload => domain.remove(text((payload as { id: string }).id, 'an event id'))),
+    api.rpc.handleOperation('command.event.delete', async (raw, context) => {
+      const input = raw as { id: unknown; expectedUpdatedAt: unknown }
+      const id = text(input.id, 'an event id'), expected = text(input.expectedUpdatedAt, 'a reviewed modification timestamp')
+      context.cancellation.throwIfAborted()
+      const deleted = await domain.remove(id, context.api, expected)
+      if (!deleted) throw Object.assign(new Error('The event changed or no longer exists'), { code: 'REVISION_CONFLICT', outcome: 'not-applied' })
+      return { id, deleted }
+    })
   ]
   const contract = config.runtime.services[0].metadata.workflow as unknown as WorkflowContributionContract
   const contribution = registerWorkflowContribution(api, contract, async ({ nodeTypeId, parameters }, context) => {

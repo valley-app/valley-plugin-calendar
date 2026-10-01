@@ -85,11 +85,11 @@ export function createCalendarDomain(owner: OwnerApi, publish: CalendarEventSink
       if (!result.ok || !result.record) throw new Error('The event changed before it could be saved.')
       return result.record
     }),
-    remove: (id: string, api = owner) => serialize(async () => {
+    remove: (id: string, api = owner, expectedUpdatedAt?: string) => serialize(async () => {
       const previous = (await read(api)).find(event => event.id === id)
       if (!previous) return false
       writable(previous)
-      return (await api.data.dataset('calendar.events').delete({ id })).affected > 0
+      return (await api.data.dataset('calendar.events').delete({ id, ...(expectedUpdatedAt === undefined ? {} : { updatedAt: expectedUpdatedAt }) })).affected > 0
     }),
     dispose: async () => { active = false; await pending.catch(() => {}) }
   }
