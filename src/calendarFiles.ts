@@ -304,7 +304,7 @@ export function appendCalendarFile(raw: string, path: string, patch: CalendarIte
   return preserveCalendar(raw, original, root)
 }
 
-export async function deleteCalendarFileEntry(entry: CalendarFileEntry): Promise<void> {
+export async function deleteCalendarFileEntry(entry: CalendarFileEntry, validateBeforeEffect?: () => Promise<void>): Promise<void> {
   const baseline = await api.vault.readTextDocument(entry.path)
   if (!baseline) throw new Error('Calendar file unavailable.')
   const root = parseRoot(baseline.content)
@@ -326,6 +326,7 @@ export async function deleteCalendarFileEntry(entry: CalendarFileEntry): Promise
       else component.removeProperty(property)
     }
   } else root.removeSubcomponent(component)
+  await validateBeforeEffect?.()
   const saved = await api.vault.writeTextDocumentGuarded(entry.path, preserveCalendar(baseline.content, original, root), baseline.revisionToken)
   if (!saved.ok || saved.editorConflict) throw new Error('Calendar file changed. Reload before deleting.')
 }

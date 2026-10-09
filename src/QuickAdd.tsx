@@ -1,5 +1,6 @@
 import { ReminderOffsets } from './ReminderOffsets'
-import { appendCalendarFile, saveCalendarFile } from './calendarFiles'
+import { appendCalendarFile, editCalendarFile } from './calendarFiles'
+import { useCalendarFileEditor, type CalendarFileEditor } from './calendarEditor'
 import { React, api } from './runtime'
 import type { ReactElement, ReactNode } from 'react'
 import { parseAppOpenUrl } from '@valley/plugin-sdk/paths'
@@ -14,6 +15,8 @@ import { createSourcedItem, creatableSources, updateSourcedItem } from './itemSo
 import { FileText, Flag, Hash, Link, MapPin, Plus, Tags, X } from './icons'
 import type { CalItem } from './items'
 import { uiText } from './localization'
+import { useCalendarFileActions, type CalendarFileFormState } from './fileViewCommands'
+import type { MountedPluginView } from '@valley/plugin-sdk'
 
 // ── quick-add popover ────────────────────────────────────────────────────────
 //
@@ -48,6 +51,7 @@ export interface QuickAddState {
 interface EventDraft {
   fields: Map<string, unknown>
   listeners: Set<() => void>
+  editor?: CalendarFileEditor
 }
 
 function eventDraft(key: string): EventDraft {
@@ -79,6 +83,7 @@ function useEventField<T>(key: string, field: string, initial: T | (() => T)): [
     const previous = read()
     const value = typeof next === 'function' ? (next as (previous: T) => T)(previous) : next
     if (Object.is(previous, value)) return
+    if (!['busy', 'error', 'expectedUpdatedAt', 'documentRevision', 'details'].includes(field) && draft.editor && !draft.editor.change()) return
     draft.fields.set(field, value)
     for (const listener of draft.listeners) listener()
   }, [draft, field, read])
@@ -111,12 +116,18 @@ interface QuickAddProps {
   groups: import('@valley/plugin-sdk/types').ValleyGroup[]
   onClose: () => void
   onAdded: () => void
+  fileEditor?: CalendarFileEditor
+  mountedView?: MountedPluginView
 }
 
 export function QuickAdd(props: QuickAddProps): ReactElement | null {
-  const initial = React.useRef(props)
+  const path = props.state.editItem?.file?.path ?? props.state.sourceFilePath
+  const ownEditor = useCalendarFileEditor(props.fileEditor ? undefined : path)
+  const initial = React.useRef({ ...props, fileEditor: props.fileEditor ?? ownEditor })
+  const draftInstance = React.useRef(crypto.randomUUID())
   React.useEffect(() => {
     const current = initial.current
+    const detachDraft = current.fileEditor?.attachDraft(!current.state.editItem)
     const control = { canDismiss: async () => true }
     const target = current.state.anchor ?? { x: 24, y: 76 }
     const focus = document.activeElement as HTMLElement | null
@@ -131,19 +142,34 @@ export function QuickAdd(props: QuickAddProps): ReactElement | null {
     }
     void api.ui.openPopover(({ close }) => {
       closePopover = close
-      return <QuickAddForm {...current} dismissControl={control} onDismiss={finish} onClose={() => { close(); finish() }} />
+      return <QuickAddForm {...current} draftInstance={draftInstance.current} dismissControl={control} onDismiss={finish} onClose={() => { close(); finish() }} />
     }, target, { width: 340, className: 'calendar-editor-popover', ariaLabel: uiText('calendar.quickadd.kind'), beforeDismiss: () => control.canDismiss() })
       .then(finish)
-    return () => { mounted = false; closePopover?.() }
+    return () => { mounted = false; closePopover?.(); detachDraft?.() }
   }, [])
   return null
 }
 
-function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismiss }: QuickAddProps & { dismissControl: { canDismiss(): Promise<boolean> }; onDismiss: () => void }): ReactElement {
+function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView, draftInstance, dismissControl, onDismiss }: QuickAddProps & { draftInstance: string; dismissControl: { canDismiss(): Promise<boolean> }; onDismiss: () => void }): ReactElement {
   React.useEffect(() => onDismiss, [onDismiss])
   const editing = state.editItem
   const closing = React.useRef(false)
-  const draftKey = editing ? `${editing.sourceId ?? editing.kind}:${editing.id}` : `new:${state.kind ?? ''}:${state.date}:${state.startTime ?? ''}`
+  const sharedDraftKey = editing ? `${editing.sourceId ?? editing.kind}:${editing.id}` : `new:${state.kind ?? ''}:${state.date}:${state.startTime ?? ''}`
+  const draftKey = fileEditor ? `${sharedDraftKey}:${draftInstance}` : sharedDraftKey
+  eventDraft(draftKey).editor = fileEditor
+  React.useEffect(() => {
+    const drafts = api.runtime.getOrCreate('calendar.eventDrafts', () => new Map<string, EventDraft>())
+    return () => {
+      const snapshot = fileEditor?.getSnapshot()
+      if (snapshot && !snapshot.dirty && snapshot.readiness === 'ready') drafts.delete(draftKey)
+    }
+  }, [draftKey, fileEditor])
+  const editorSnapshot = React.useSyncExternalStore(
+    fileEditor?.subscribe ?? (() => () => {}),
+    fileEditor?.getSnapshot ?? (() => null),
+    fileEditor?.getSnapshot ?? (() => null)
+  )
+  const frozen = Boolean(fileEditor?.locked || (editorSnapshot && editorSnapshot.readiness !== 'ready'))
   // Which sources accept new items. Read once per mount: the tab strip must not
   // reshuffle under the user's cursor if a plugin loads mid-edit.
   const [sources] = React.useState(() => creatableSources())
@@ -176,10 +202,10 @@ function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismi
   // links. One block, the way the row reads them.
   const [urls, setUrls] = useEventField<string[]>(draftKey, 'urls', editing?.urls ?? editing?.event?.urls ?? editing?.sourced?.urls ?? [])
   const [attachments, setAttachments] = useEventField<string[]>(draftKey, 'attachments', editing?.attachments ?? editing?.event?.attachments ?? editing?.sourced?.attachments ?? [])
-  const [addingAttachment, setAddingAttachment] = React.useState(false)
-  const [attachmentDraft, setAttachmentDraft] = React.useState('')
-  const [addingUrl, setAddingUrl] = React.useState(false)
-  const [urlDraft, setUrlDraft] = React.useState('')
+  const [addingAttachment, setAddingAttachment] = useEventField(draftKey, 'addingAttachment', false)
+  const [attachmentDraft, setAttachmentDraft] = useEventField(draftKey, 'attachmentDraft', '')
+  const [addingUrl, setAddingUrl] = useEventField(draftKey, 'addingUrl', false)
+  const [urlDraft, setUrlDraft] = useEventField(draftKey, 'urlDraft', '')
   // Fields only a contributed item carries.
   const [priority, setPriority] = useEventField<SourcePriority>(draftKey, 'priority',
     (editing?.sourced?.priority as SourcePriority | undefined) ?? 'normal'
@@ -191,13 +217,9 @@ function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismi
   const [busy, setBusy] = useEventField(draftKey, 'busy', false)
   const [error, setError] = useEventField(draftKey, 'error', '')
 
-  const [details, setDetails] = React.useState(false)
-  const [recurrenceScope, setRecurrenceScope] = React.useState<'occurrence' | 'series'>('occurrence')
-  const [fileBaseline, setFileBaseline] = React.useState<{ content: string; revisionToken: string } | null>(null)
-  React.useEffect(() => {
-    const path = editing?.file?.path ?? state.sourceFilePath
-    if (path) void api.vault.readTextDocument(path).then(setFileBaseline, error => setError(String(error)))
-  }, [editing?.file?.path, state.sourceFilePath])
+  const [details, setDetails] = useEventField(draftKey, 'details', false)
+  const [recurrenceScope, setRecurrenceScope] = useEventField<'occurrence' | 'series'>(draftKey, 'recurrenceScope', 'occurrence')
+  const fileBaseline = fileEditor?.baseline
 
   const addUrl = (raw: string): void => {
     const next = normalizeEventUrl(raw)
@@ -236,25 +258,30 @@ function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismi
     }, () => { if (active) setError(uiText('calendar.error.save')) })
     return () => { active = false }
   }, [editing?.id, editing?.kind, editing?.readOnly, documentRevision])
-  const cancel = async (): Promise<boolean> => {
-    if (eventDraft(draftKey).fields.get('busy') || closing.current) return false
+  const cancel = async (validateBeforeEffect?: () => Promise<void>, command = false): Promise<boolean> => {
+    if (eventDraft(draftKey).fields.get('busy') || fileEditor?.locked || closing.current) return false
     try {
+      await validateBeforeEffect?.()
+      if (eventDraft(draftKey).fields.get('busy') || fileEditor?.locked || closing.current) throw Object.assign(new Error('The Calendar draft changed before cancellation.'), { outcome: 'not-applied' })
       closing.current = true
       if (documentRef) await api.documents.drafts.clear(documentRef)
+      if (fileEditor && !await fileEditor.discardDraft()) throw new Error(fileEditor.error || uiText('calendar.error.save'))
       eventDraft(draftKey).fields.clear()
       onClose()
       return true
     } catch (reason) {
       closing.current = false
       setError(reason instanceof Error ? reason.message : String(reason))
+      if (command) throw reason
       return false
     }
   }
   dismissControl.canDismiss = cancel
 
-  const submit = async (): Promise<void> => {
+  const submit = async (validateBeforeEffect?: () => Promise<void>, command = false): Promise<void> => {
     const trimmed = title.trim()
-    if (!trimmed || eventDraft(draftKey).fields.get('busy') || editing?.readOnly) return
+    if (!trimmed || eventDraft(draftKey).fields.get('busy') || frozen || editing?.readOnly) return
+    const fileRevision = fileEditor?.getSnapshot().revision
     setBusy(true)
     setError('')
     try {
@@ -274,8 +301,9 @@ function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismi
       const sourcedExtras = { ...shared, group: groupName, tags, priority }
       if (editing) {
         if (editing.file) {
-          if (!fileBaseline) throw new Error(uiText('calendar.error.save'))
-          await saveCalendarFile(editing.file, { title: trimmed, date: day, endDate: endDate || undefined, startTime: start || undefined, endTime: end || undefined, ...shared, tags }, recurrenceScope, fileBaseline)
+          if (!fileBaseline || !fileEditor) throw new Error(uiText('calendar.error.save'))
+          const content = editCalendarFile(fileBaseline.content, editing.file, { title: trimmed, date: day, endDate: endDate || undefined, startTime: start || undefined, endTime: end || undefined, ...shared, tags }, recurrenceScope)
+          await fileEditor.save(content, fileRevision!, validateBeforeEffect)
         } else if (editing.kind === 'sourced' && editing.sourceId) {
           if (!await updateSourcedItem(editing.sourceId, editing.id, { title: trimmed, date: day, startTime: start || undefined, endTime: end || undefined, ...sourcedExtras })) throw new Error(uiText('calendar.error.save'))
         } else if (editing.kind === 'event' && editing.event) {
@@ -297,10 +325,9 @@ function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismi
           if (!saved) throw new Error(uiText('calendar.error.save'))
         }
       } else if (state.sourceFilePath) {
-        if (!fileBaseline) throw new Error(uiText('calendar.error.save'))
+        if (!fileBaseline || !fileEditor) throw new Error(uiText('calendar.error.save'))
         const content = appendCalendarFile(fileBaseline.content, state.sourceFilePath, { title: trimmed, date: day, endDate: endDate || undefined, startTime: start || undefined, endTime: end || undefined, ...shared })
-        const saved = await api.vault.writeTextDocumentGuarded(state.sourceFilePath, content, fileBaseline.revisionToken)
-        if (!saved.ok || saved.editorConflict) throw new Error(uiText('calendar.error.changed'))
+        await fileEditor.save(content, fileRevision!, validateBeforeEffect)
       } else if (kind === 'event') {
         const saved = await appendEvent(
           newEvent(trimmed, day, {
@@ -329,10 +356,54 @@ function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismi
     } catch (reason) {
       closing.current = false
       setError(reason instanceof Error ? reason.message : String(reason))
+      if (command) throw reason
     } finally {
       if (!closing.current) setBusy(false)
     }
   }
+
+  const refuseForm = (): void => {
+    if (!fileEditor || closing.current || busy || frozen || editing?.readOnly) throw Object.assign(new Error('The exact Calendar file draft is unavailable.'), { outcome: 'not-applied' })
+  }
+  const formSnapshot = (): CalendarFileFormState => {
+    const fields = eventDraft(draftKey).fields
+    const value = <T,>(key: string, fallback: T): T => fields.has(key) ? fields.get(key) as T : fallback
+    const rawStart = value('start', start), rawEnd = value('end', end)
+    return { title: value('title', title), date: value('date', date), endDate: value('endDate', endDate), start: rawStart, end: rawEnd, allDay: !rawStart && !rawEnd, location: value('location', location) ?? null, tags: value('tags', tags), note: value('note', note), urls: value('urls', urls), attachments: value('attachments', attachments), filePath: value('filePath', filePath), details: value('details', details), recurrenceScope: value('recurrenceScope', recurrenceScope), busy: value('busy', busy), frozen: Boolean(fileEditor?.locked || fileEditor?.getSnapshot().readiness !== 'ready'), readOnly: editing?.readOnly ?? false, isNew: !editing }
+  }
+  useCalendarFileActions(fileEditor ? mountedView : undefined, 'form', {
+    snapshot: formSnapshot,
+    actions: {
+      'form-patch': action => {
+        if (action.type !== 'form-patch') return
+        refuseForm()
+        const patch = action.patch
+        if ((editing?.file?.availability || state.sourceFilePath?.endsWith('.ifb')) && (patch.title !== undefined || patch.allDay !== undefined)) throw Object.assign(new Error('Availability title and all-day controls are read-only.'), { outcome: 'not-applied' })
+        if (patch.recurrenceScope !== undefined && !editing?.file?.recurring) throw Object.assign(new Error('Recurrence scope requires an existing recurring Calendar entry.'), { outcome: 'not-applied' })
+        if (patch.allDay !== undefined && (patch.start !== undefined || patch.end !== undefined)) throw Object.assign(new Error('Set all-day or explicit times in separate draft patches.'), { outcome: 'not-applied' })
+        if (patch.title !== undefined) setTitle(patch.title)
+        if (patch.date !== undefined) setDate(patch.date)
+        if (patch.endDate !== undefined) setEndDate(patch.endDate)
+        if (patch.start !== undefined) setStart(patch.start)
+        if (patch.end !== undefined) setEnd(patch.end)
+        if (patch.allDay !== undefined) setAllDay(patch.allDay)
+        if (patch.location !== undefined) setLocation(patch.location ?? undefined)
+        if (patch.tags !== undefined) setTags(patch.tags)
+        if (patch.note !== undefined) setNote(patch.note)
+        if (patch.filePath !== undefined) setFilePath(patch.filePath)
+        if (patch.details !== undefined) setDetails(patch.details)
+        if (patch.recurrenceScope !== undefined) setRecurrenceScope(patch.recurrenceScope)
+      },
+      'url-add': action => { if (action.type === 'url-add') { refuseForm(); if (!normalizeEventUrl(action.value)) throw Object.assign(new Error('The Calendar URL is invalid.'), { outcome: 'not-applied' }); addUrl(action.value) } },
+      'url-remove': action => { if (action.type === 'url-remove') { refuseForm(); if (!urls.includes(action.value)) throw Object.assign(new Error('This exact Calendar URL is missing.'), { outcome: 'not-applied' }); setUrls(urls.filter(value => value !== action.value)) } },
+      'attachment-add': action => { if (action.type === 'attachment-add') { refuseForm(); if (!action.value || action.value.startsWith('/') || action.value.split('/').some(part => part === '..')) throw Object.assign(new Error('Expected a vault-relative attachment path.'), { outcome: 'not-applied' }); if (!attachments.includes(action.value)) setAttachments([...attachments, action.value]) } },
+      'attachment-remove': action => { if (action.type === 'attachment-remove') { refuseForm(); if (!attachments.includes(action.value)) throw Object.assign(new Error('This exact Calendar attachment is missing.'), { outcome: 'not-applied' }); setAttachments(attachments.filter(value => value !== action.value)) } },
+      'url-open': async (action, context) => { if (action.type === 'url-open') { refuseForm(); if (!urls.includes(action.value)) throw Object.assign(new Error('This exact Calendar URL is missing.'), { outcome: 'not-applied' }); const path = parseAppOpenUrl(action.value); await context.validate(path ? [{ kind: 'file', path, fileOperation: 'read' }] : []); if (path) await api.workspace.openFile(path); else await api.files.openExternalUrl(action.value) } },
+      'attachment-open': async (action, context) => { if (action.type === 'attachment-open') { refuseForm(); if (!attachments.includes(action.value)) throw Object.assign(new Error('This exact Calendar attachment is missing.'), { outcome: 'not-applied' }); await context.validate([{ kind: 'file', path: action.value, fileOperation: 'read' }]); await api.workspace.openFile(action.value) } },
+      cancel: async (_action, context) => { refuseForm(); if (!await cancel(() => context.validate(), true)) throw Object.assign(new Error('The Calendar draft could not be cancelled.'), { outcome: 'not-applied' }) },
+      save: async (_action, context) => { refuseForm(); if (!title.trim()) throw Object.assign(new Error('The Calendar draft title is empty.'), { outcome: 'not-applied' }); await submit(() => context.validate(), true) }
+    }
+  })
 
   const isEvent = kind === 'event'
   const kindLabel = (id: string): string =>
@@ -359,20 +430,24 @@ function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismi
             />
         </div>}
       footer={<div className="calendar-quickadd-footer">
-        <button className="calendar-quickadd-cancel" type="button" disabled={busy} onClick={() => void cancel()}>{uiText('auto.77dfd2135f4d')}</button>
-        {!editing?.readOnly && <button className="calendar-quickadd-save" type="button" onClick={() => void submit()} disabled={!title.trim() || busy || (!!documentRef && !documentRevision) || (!!(editing?.file || state.sourceFilePath) && !fileBaseline)}>
+        <button className="calendar-quickadd-cancel" type="button" disabled={busy || !!fileEditor?.locked} onClick={() => void cancel()}>{uiText('auto.77dfd2135f4d')}</button>
+        {!editing?.readOnly && <button className="calendar-quickadd-save" type="button" onClick={() => void submit()} disabled={!title.trim() || busy || frozen || (!!documentRef && !documentRevision) || (!!(editing?.file || state.sourceFilePath) && !fileBaseline)}>
           {editing ? uiText('auto.efc007a393f6') : uiText('auto.61cc55aa0453')}
         </button>}
 
       </div>}
     >
-      <div className="calendar-quickadd-body" onKeyDown={event => {
+      <div className="calendar-quickadd-body"
+        onBeforeInputCapture={event => { if (frozen) { event.preventDefault(); event.stopPropagation() } }}
+        onPointerDownCapture={event => { if (frozen) { event.preventDefault(); event.stopPropagation() } }}
+        onKeyDownCapture={event => { if (frozen) { event.preventDefault(); event.stopPropagation() } }}
+        onKeyDown={event => {
       if (event.key !== 'Escape') return
       event.preventDefault()
       event.stopPropagation()
       void cancel()
     }}>
-          <fieldset disabled={!!editing?.readOnly} style={{ display: 'contents' }}>
+          <fieldset disabled={!!editing?.readOnly || frozen} style={{ display: 'contents' }}>
           <input
             data-modal-initial-focus="true"
             autoFocus
@@ -563,7 +638,7 @@ function QuickAddForm({ state, groups, onClose, onAdded, dismissControl, onDismi
           />
           </div>
           </fieldset>
-        {error && <div role="alert">{error}</div>}
+        {(error || fileEditor?.error) && <div role="alert">{error || fileEditor?.error}</div>}
       </div>
     </api.ui.ScrollPanel>
   )

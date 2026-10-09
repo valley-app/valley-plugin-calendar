@@ -341,7 +341,7 @@ export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void
       if (raw.path !== undefined && (typeof raw.path !== 'string' || !/\.(?:ics|ifb|vcs)$/i.test(raw.path) || !await pluginApi.vault.fileInfo(raw.path))) throw new Error('The calendar file is unavailable.')
       const item = await resolveItem(raw)
       if (raw.itemId !== undefined && !item) throw new Error('The bookmarked calendar item is unavailable.')
-      if (patch.view) saveCalendarViewMode(surface, patch.view)
+      if (patch.view) void saveCalendarViewMode(surface, patch.view)
       pluginApi.workspace.patchTimeControl(patch)
       selectCalendarProperties(item, surface)
     }

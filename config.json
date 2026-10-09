@@ -709,8 +709,17 @@
                   "type": "object",
                   "properties": {},
                   "required": [],
-                  "additionalProperties": false
-                }
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "version": "1.0.0",
+                "executionMode": "item",
+                "effect": "read",
+                "idempotent": true,
+                "readiness": {
+                  "state": "Available"
+                },
+                "description": "Event created. Uses committed owner data and authenticated causation."
               },
               {
                 "id": "event.updated",
@@ -728,8 +737,17 @@
                   "type": "object",
                   "properties": {},
                   "required": [],
-                  "additionalProperties": false
-                }
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "version": "1.0.0",
+                "executionMode": "item",
+                "effect": "read",
+                "idempotent": true,
+                "readiness": {
+                  "state": "Available"
+                },
+                "description": "Event updated. Uses committed owner data and authenticated causation."
               },
               {
                 "id": "event.create",
@@ -746,7 +764,122 @@
                   {
                     "id": "output",
                     "label": "Output",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "date": {
+                          "type": "string"
+                        },
+                        "endDate": {
+                          "type": "string"
+                        },
+                        "reminderTime": {
+                          "type": "string"
+                        },
+                        "startTime": {
+                          "type": "string"
+                        },
+                        "endTime": {
+                          "type": "string"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "category": {
+                          "type": "string"
+                        },
+                        "groupId": {
+                          "type": "string"
+                        },
+                        "group": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "filePath": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "allDay": {
+                          "type": "boolean"
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        },
+                        "reminderOffsets": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "urls": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "attachments": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "location": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "lng": {
+                              "type": "number"
+                            },
+                            "lat": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "date",
+                        "allDay",
+                        "tags",
+                        "note",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 ],
                 "parameterSchema": {
@@ -754,32 +887,174 @@
                   "properties": {
                     "title": {
                       "type": "string",
-                      "title": "Title"
+                      "title": "Title",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "date": {
                       "type": "string",
-                      "title": "Date"
+                      "title": "Date",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "endDate": {
                       "type": "string",
-                      "title": "End date"
+                      "title": "End date",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "startTime": {
                       "type": "string",
-                      "title": "Start time"
+                      "title": "Start time",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "endTime": {
                       "type": "string",
-                      "title": "End time"
+                      "title": "End time",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "note": {
                       "type": "string",
-                      "title": "Notes"
+                      "title": "Notes",
+                      "ui": {
+                        "control": "textarea"
+                      }
                     }
                   },
                   "required": [
                     "title",
                     "date"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "version": "1.0.0",
+                "executionMode": "item",
+                "effect": "write",
+                "idempotent": false,
+                "readiness": {
+                  "state": "Available"
+                },
+                "description": "Create event. Uses committed owner data and authenticated causation.",
+                "outputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "endDate": {
+                      "type": "string"
+                    },
+                    "reminderTime": {
+                      "type": "string"
+                    },
+                    "startTime": {
+                      "type": "string"
+                    },
+                    "endTime": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "filePath": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "allDay": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "reminderOffsets": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "urls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "date",
+                    "allDay",
+                    "tags",
+                    "note",
+                    "createdAt",
+                    "updatedAt"
                   ],
                   "additionalProperties": false
                 }
@@ -799,7 +1074,122 @@
                   {
                     "id": "output",
                     "label": "Output",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "date": {
+                          "type": "string"
+                        },
+                        "endDate": {
+                          "type": "string"
+                        },
+                        "reminderTime": {
+                          "type": "string"
+                        },
+                        "startTime": {
+                          "type": "string"
+                        },
+                        "endTime": {
+                          "type": "string"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "category": {
+                          "type": "string"
+                        },
+                        "groupId": {
+                          "type": "string"
+                        },
+                        "group": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "filePath": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "allDay": {
+                          "type": "boolean"
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        },
+                        "reminderOffsets": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "urls": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "attachments": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "location": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "lng": {
+                              "type": "number"
+                            },
+                            "lat": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "date",
+                        "allDay",
+                        "tags",
+                        "note",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 ],
                 "parameterSchema": {
@@ -807,11 +1197,138 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "title": "Event ID"
+                      "title": "Event ID",
+                      "ui": {
+                        "control": "text"
+                      }
                     }
                   },
                   "required": [
                     "id"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "version": "1.0.0",
+                "executionMode": "item",
+                "effect": "read",
+                "idempotent": true,
+                "readiness": {
+                  "state": "Available"
+                },
+                "description": "Get event. Uses committed owner data and authenticated causation.",
+                "outputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "endDate": {
+                      "type": "string"
+                    },
+                    "reminderTime": {
+                      "type": "string"
+                    },
+                    "startTime": {
+                      "type": "string"
+                    },
+                    "endTime": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "filePath": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "allDay": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "reminderOffsets": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "urls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "date",
+                    "allDay",
+                    "tags",
+                    "note",
+                    "createdAt",
+                    "updatedAt"
                   ],
                   "additionalProperties": false
                 }
@@ -831,7 +1348,122 @@
                   {
                     "id": "output",
                     "label": "Output",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "date": {
+                          "type": "string"
+                        },
+                        "endDate": {
+                          "type": "string"
+                        },
+                        "reminderTime": {
+                          "type": "string"
+                        },
+                        "startTime": {
+                          "type": "string"
+                        },
+                        "endTime": {
+                          "type": "string"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "category": {
+                          "type": "string"
+                        },
+                        "groupId": {
+                          "type": "string"
+                        },
+                        "group": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "filePath": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "allDay": {
+                          "type": "boolean"
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        },
+                        "reminderOffsets": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "urls": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "attachments": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "location": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "lng": {
+                              "type": "number"
+                            },
+                            "lat": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "date",
+                        "allDay",
+                        "tags",
+                        "note",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 ],
                 "parameterSchema": {
@@ -839,21 +1471,155 @@
                   "properties": {
                     "from": {
                       "type": "string",
-                      "title": "From date"
+                      "title": "From date",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "to": {
                       "type": "string",
-                      "title": "To date"
+                      "title": "To date",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "limit": {
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 1000,
                       "default": 100,
-                      "title": "Limit"
+                      "title": "Limit",
+                      "ui": {
+                        "control": "number",
+                        "step": 1
+                      }
                     }
                   },
                   "required": [],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "version": "1.0.0",
+                "executionMode": "item",
+                "effect": "read",
+                "idempotent": true,
+                "readiness": {
+                  "state": "Available"
+                },
+                "description": "List events. Uses committed owner data and authenticated causation.",
+                "outputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "endDate": {
+                      "type": "string"
+                    },
+                    "reminderTime": {
+                      "type": "string"
+                    },
+                    "startTime": {
+                      "type": "string"
+                    },
+                    "endTime": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "filePath": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "allDay": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "reminderOffsets": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "urls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "date",
+                    "allDay",
+                    "tags",
+                    "note",
+                    "createdAt",
+                    "updatedAt"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -872,7 +1638,122 @@
                   {
                     "id": "output",
                     "label": "Output",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "date": {
+                          "type": "string"
+                        },
+                        "endDate": {
+                          "type": "string"
+                        },
+                        "reminderTime": {
+                          "type": "string"
+                        },
+                        "startTime": {
+                          "type": "string"
+                        },
+                        "endTime": {
+                          "type": "string"
+                        },
+                        "color": {
+                          "type": "string"
+                        },
+                        "category": {
+                          "type": "string"
+                        },
+                        "groupId": {
+                          "type": "string"
+                        },
+                        "group": {
+                          "type": "string"
+                        },
+                        "note": {
+                          "type": "string"
+                        },
+                        "filePath": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "allDay": {
+                          "type": "boolean"
+                        },
+                        "readOnly": {
+                          "type": "boolean"
+                        },
+                        "reminderOffsets": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "tags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "urls": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "attachments": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "location": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "lng": {
+                              "type": "number"
+                            },
+                            "lat": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "date",
+                        "allDay",
+                        "tags",
+                        "note",
+                        "createdAt",
+                        "updatedAt"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 ],
                 "parameterSchema": {
@@ -880,37 +1761,278 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "title": "Event ID"
+                      "title": "Event ID",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "title": {
                       "type": "string",
-                      "title": "Title"
+                      "title": "Title",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "date": {
                       "type": "string",
-                      "title": "Date"
+                      "title": "Date",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "endDate": {
                       "type": "string",
-                      "title": "End date"
+                      "title": "End date",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "startTime": {
                       "type": "string",
-                      "title": "Start time"
+                      "title": "Start time",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "endTime": {
                       "type": "string",
-                      "title": "End time"
+                      "title": "End time",
+                      "ui": {
+                        "control": "text"
+                      }
                     },
                     "note": {
                       "type": "string",
-                      "title": "Notes"
+                      "title": "Notes",
+                      "ui": {
+                        "control": "textarea"
+                      }
                     }
                   },
                   "required": [
                     "id"
                   ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "version": "1.0.0",
+                "executionMode": "item",
+                "effect": "write",
+                "idempotent": false,
+                "readiness": {
+                  "state": "Available"
+                },
+                "description": "Update event. Uses committed owner data and authenticated causation.",
+                "outputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "endDate": {
+                      "type": "string"
+                    },
+                    "reminderTime": {
+                      "type": "string"
+                    },
+                    "startTime": {
+                      "type": "string"
+                    },
+                    "endTime": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    },
+                    "group": {
+                      "type": "string"
+                    },
+                    "note": {
+                      "type": "string"
+                    },
+                    "filePath": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string"
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "allDay": {
+                      "type": "boolean"
+                    },
+                    "readOnly": {
+                      "type": "boolean"
+                    },
+                    "reminderOffsets": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "urls": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "lng": {
+                          "type": "number"
+                        },
+                        "lat": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "date",
+                    "allDay",
+                    "tags",
+                    "note",
+                    "createdAt",
+                    "updatedAt"
+                  ],
                   "additionalProperties": false
+                }
+              },
+              {
+                "id": "event.delete",
+                "type": "action",
+                "version": "1.0.0",
+                "displayName": "Delete a local event only if its reviewed modification timestamp still matches",
+                "description": "Delete a local event only if its reviewed modification timestamp still matches. Reuses the owning backend and its reviewed revision checks.",
+                "effect": "write",
+                "idempotent": false,
+                "executionMode": "item",
+                "inputs": [
+                  {
+                    "id": "input",
+                    "label": "Input",
+                    "dataType": "json",
+                    "schema": {
+                      "type": "object"
+                    }
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "output",
+                    "label": "Result",
+                    "dataType": "json",
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "deleted": {
+                          "const": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "deleted"
+                      ],
+                      "additionalProperties": false,
+                      "$schema": "http://json-schema.org/draft-07/schema#"
+                    }
+                  }
+                ],
+                "parameterSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256,
+                      "title": "id",
+                      "ui": {
+                        "control": "text"
+                      }
+                    },
+                    "expectedUpdatedAt": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64,
+                      "title": "expectedUpdatedAt",
+                      "ui": {
+                        "control": "text"
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "expectedUpdatedAt"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "inputSchema": {
+                  "type": "object"
+                },
+                "outputSchema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "deleted": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "deleted"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                },
+                "readiness": {
+                  "state": "Available"
                 }
               }
             ]
@@ -1651,7 +2773,8 @@
                 "id",
                 "expectedUpdatedAt"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
             },
             "outputSchema": {
               "type": "object",
@@ -1667,10 +2790,23 @@
                 "id",
                 "deleted"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
             }
           }
         }
+      },
+      {
+        "id": "workflow.catalog",
+        "version": "1.0.0",
+        "method": "workflow.catalog",
+        "request": {
+          "type": "unknown"
+        },
+        "response": {
+          "type": "unknown"
+        },
+        "operation": true
       }
     ],
     "activation": {
@@ -1678,7 +2814,10 @@
         "background",
         "capability"
       ]
-    }
+    },
+    "largeDataOperations": [
+      "workflow.execute"
+    ]
   },
   "indexState": "scoped",
   "fileViews": {
@@ -1709,7 +2848,8 @@
       "metadata": [
         "assets/icon/calendar-icon"
       ]
-    }
+    },
+    "largeData": true
   },
   "notifications": [
     {

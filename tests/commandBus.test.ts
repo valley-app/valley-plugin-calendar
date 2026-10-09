@@ -1,13 +1,32 @@
-import { describe, expect, it } from 'vitest'
-import type { DataRecord } from '@valley/plugin-sdk/types'
+import Ajv2020 from 'ajv/dist/2020'
+import { describe, expect, it, vi } from 'vitest'
+import type { DataRecord, ValleyPluginManifest } from '@valley/plugin-sdk/types'
+import { CALENDAR_ITEM_SOURCE_V2, type CalendarItemPatch, type CalendarSourceItem } from '@valley/plugin-sdk'
 import { createMockValleyApi, type MockValleyApi } from './harness'
 import { initRuntime as initCalendarRuntime } from '../src/runtime'
 import { registerCalendarCommands } from '../src/commands'
+import config from '../config.json'
+
+function validatePublishedResults(mock: { api: import('@valley/plugin-sdk').ValleyPluginApi }): void {
+  const original = mock.api.commands.register
+  vi.spyOn(mock.api.commands, 'register').mockImplementation(definition => {
+    const schema = (definition as typeof definition & { outputSchema?: Record<string, unknown> }).outputSchema
+    expect(schema, definition.id).toBeDefined()
+    const validate = new Ajv2020({ strict: false, strictSchema: true, allowUnionTypes: true, ownProperties: true, validateFormats: false }).compile(schema!)
+    expect(validate({ unexpected: true }), definition.id).toBe(false)
+    return original({ ...definition, run: async (input, context) => {
+      const result = await definition.run(input, context)
+      const value = definition.sideEffect === 'write' ? (result as { value: unknown }).value : result
+      expect(validate(value), `${definition.id}: ${JSON.stringify(validate.errors)}`).toBe(true)
+      return result
+    } } as typeof definition)
+  })
+}
 
 describe('calendar commands (bus)', () => {
   function setup(events: DataRecord[] = []): MockValleyApi {
     const mock = createMockValleyApi({
-      manifest: { id: 'calendar' },
+      manifest: { id: 'calendar', datasets: config.datasets as unknown as ValleyPluginManifest['datasets'], noteDocuments: config.noteDocuments },
       datasets: {
         'calendar.events': events,
         'calendar.event_tags': [],
@@ -15,6 +34,7 @@ describe('calendar commands (bus)', () => {
         'calendar.event_attachments': []
       }
     })
+    validatePublishedResults(mock)
     initCalendarRuntime(mock.api)
     registerCalendarCommands(mock.api)
     return mock
@@ -45,5 +65,58 @@ describe('calendar commands (bus)', () => {
     const r = await mock.api.commands.execute('calendar:goto', { date: '2026-06-20' })
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.value).toMatchObject({ selectedDate: '2026-06-20', cursor: '2026-06-01' })
+  })
+
+  it('declares the persisted time-selection commands goto and today as non-undoable writes with a side-effect-free preview', async () => {
+    const mock = setup()
+    for (const id of ['calendar:goto', 'calendar:today']) expect(mock.api.commands.describe(id), id).toMatchObject({ sideEffect: 'write', previewSupported: true })
+    const before = structuredClone(mock.timeControl())
+    expect(await mock.api.commands.preview('calendar:goto', { date: '2026-06-20' })).toEqual({ ok: true, value: { cursor: '2026-06-01', selectedDate: '2026-06-20' } })
+    expect(await mock.api.commands.preview('calendar:today', undefined)).toMatchObject({ ok: true, value: { selectedDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } })
+    expect(mock.timeControl()).toEqual(before)
+    const undo = mock.busUndo.length
+    expect(await mock.api.commands.execute('calendar:goto', { date: '2026-06-20' })).toMatchObject({ ok: true, value: { selectedDate: '2026-06-20', cursor: '2026-06-01' } })
+    expect(await mock.api.commands.execute('calendar:today', undefined)).toMatchObject({ ok: true, value: { selectedDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) } })
+    expect(mock.busUndo).toHaveLength(undo)
+  })
+
+  it('validates local item and navigation results through their exact published contracts while retaining revisions and undo', async () => {
+    const mock = setup()
+    const created = await mock.api.commands.execute('calendar:add', { title: 'Fern survey', date: '2026-06-20' })
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    const event = created.value as { id: string; updatedAt: string }
+    for (const command of ['get', 'open']) expect(await mock.api.commands.execute(`calendar:${command}`, { id: event.id })).toMatchObject({ ok: true, value: { kind: 'event', id: event.id } })
+    const edited = await mock.api.commands.execute('calendar:edit-fields', { id: event.id, expectedUpdatedAt: event.updatedAt, values: { note: '', tags: [], location: null } })
+    expect(edited, JSON.stringify(edited)).toMatchObject({ ok: true, value: { kind: 'event', note: '', tags: [] } })
+    expect(await mock.api.commands.execute('calendar:edit-fields', { id: event.id, expectedUpdatedAt: 'stale', values: { note: 'Refused' } })).toMatchObject({ ok: false })
+    expect(await mock.api.commands.execute('calendar:list-items', {})).toMatchObject({ ok: true, value: [{ id: event.id }] })
+    expect(await mock.api.commands.execute('calendar:delete', { id: event.id })).toMatchObject({ ok: true, value: { id: event.id } })
+    await mock.busUndo.at(-1)!.undo()
+    expect(await mock.api.commands.execute('calendar:get', { id: event.id })).toMatchObject({ ok: true })
+    expect(await mock.api.commands.execute('calendar:set-view', { view: 'week' })).toMatchObject({ ok: true, value: { view: 'week' } })
+    expect(await mock.api.commands.execute('calendar:today', undefined)).toMatchObject({ ok: true })
+    expect(await mock.api.commands.execute('calendar:open-page', undefined)).toMatchObject({ ok: true, value: null })
+  })
+
+  it('validates contributed source results and actions through the same provider without treating an unavailable owner as success', async () => {
+    const mock = setup(), items: CalendarSourceItem[] = [{ id: 'oak', title: 'Oak', date: '2026-06-20', completed: false, tags: [], note: '' }]
+    const create = vi.fn(async (date: string, patch: CalendarItemPatch) => { items.push({ id: 'new', date, title: patch.title!, ...patch }); return true })
+    const update = vi.fn(async (id: string, patch: CalendarItemPatch) => { Object.assign(items.find(item => item.id === id)!, patch); return true })
+    const action = vi.fn(async (_id: string, _action: string) => true)
+    const release = mock.provideInterop(CALENDAR_ITEM_SOURCE_V2, { list: async () => ({ items, revision: 'source:1' }), create, update, remove: async (id: string) => { items.splice(items.findIndex(item => item.id === id), 1); return true }, actions: async () => [{ id: 'mark', label: 'Mark', enabled: false, submenu: [{ id: 'edit', label: 'Edit' }] }], runAction: action }, 'specimens')
+    const sourceId = mock.api.interop.services.providers(CALENDAR_ITEM_SOURCE_V2)[0].providerId
+    expect(await mock.api.commands.execute('calendar:sources', undefined)).toMatchObject({ ok: true, value: [{ sourceId, owner: 'specimens' }] })
+    expect(await mock.api.commands.execute('calendar:source-actions', { sourceId, id: 'oak' })).toMatchObject({ ok: true, value: [{ enabled: false, submenu: [{ id: 'edit' }] }] })
+    expect(await mock.api.commands.execute('calendar:get', { sourceId, id: 'oak' })).toMatchObject({ ok: true, value: { kind: 'sourced', completed: false, note: '' } })
+    expect(await mock.api.commands.execute('calendar:edit-fields', { sourceId, id: 'oak', values: { completed: false, tags: [], note: '' } })).toMatchObject({ ok: true })
+    expect(update).toHaveBeenCalledWith('oak', { completed: false, tags: [], note: '' })
+    expect(await mock.api.commands.execute('calendar:source-create', { sourceId, date: '2026-06-21', values: { title: 'Fern' } })).toMatchObject({ ok: true, value: true })
+    expect(create).toHaveBeenCalledOnce()
+    expect(await mock.api.commands.execute('calendar:source-action', { sourceId, id: 'oak', actionId: 'mark' })).toMatchObject({ ok: true, value: true })
+    expect(action).toHaveBeenCalledWith('oak', 'mark')
+    release()
+    expect(await mock.api.commands.execute('calendar:source-action', { sourceId, id: 'oak', actionId: 'mark' })).toMatchObject({ ok: false })
+    expect(action).toHaveBeenCalledOnce()
   })
 })

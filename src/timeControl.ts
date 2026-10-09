@@ -1,5 +1,5 @@
 import { React, api } from './runtime'
-import type { CalendarViewMode, SlotId, TimeControlState } from '@valley/plugin-sdk/types'
+import type { CalendarViewMode, DriverResult, SlotId, TimeControlState } from '@valley/plugin-sdk/types'
 import { defaultTimeControl, isTimeControlDate, normalizeTimeControl } from '@valley/plugin-sdk/timeControl'
 
 export type { CalendarViewMode, TimeControlState } from '@valley/plugin-sdk/types'
@@ -32,28 +32,35 @@ export function calendarViewMode(surface: SlotId, fallback: CalendarViewMode): C
   return value === 'week' || value === 'month' || value === 'year' ? value : fallback
 }
 
-export function saveCalendarViewMode(surface: SlotId, view: CalendarViewMode): void {
-  void api.settings.set(surface === 'right_sidebar' ? 'sidebarView' : 'mainView', view)
+export function saveCalendarViewMode(surface: SlotId, view: CalendarViewMode): Promise<DriverResult> {
+  return api.settings.set(surface === 'right_sidebar' ? 'sidebarView' : 'mainView', view)
 }
 
 export function useTimeControl(surface?: SlotId): [TimeControlState, (patch: Partial<TimeControlState>) => void] {
   const [tc, setTc] = React.useState<TimeControlState>(defaultTimeControl)
+  const pendingView = React.useRef<{ view: CalendarViewMode } | null>(null)
 
   React.useEffect(() => {
     let cancelled = false
     let changed = false
     void api.workspace.getTimeControl().then((value) => {
-      if (!cancelled && !changed) setTc(surface ? { ...value, view: calendarViewMode(surface, value.view) } : value)
+      if (!cancelled && !changed) setTc(surface ? { ...value, view: pendingView.current?.view ?? calendarViewMode(surface, value.view) } : value)
     })
     const off = api.workspace.onTimeControlChanged((next) => {
       changed = true
       setTc(current => surface ? { ...next, view: current.view } : next)
     })
     const offSettings = surface ? api.settings.subscribe(() => {
-      setTc(current => ({ ...current, view: calendarViewMode(surface, current.view) }))
+      setTc(current => {
+        const view = calendarViewMode(surface, current.view)
+        if (pendingView.current && pendingView.current.view !== view) return current
+        pendingView.current = null
+        return { ...current, view }
+      })
     }) : undefined
     return () => {
       cancelled = true
+      pendingView.current = null
       off()
       offSettings?.()
     }
@@ -61,7 +68,18 @@ export function useTimeControl(surface?: SlotId): [TimeControlState, (patch: Par
 
   const patch = React.useCallback((p: Partial<TimeControlState>) => {
     setTc((current) => ({ ...current, ...p }))
-    if (surface && p.view) saveCalendarViewMode(surface, p.view)
+    if (surface && p.view) {
+      const request = { view: p.view }
+      pendingView.current = request
+      const refused = (): void => {
+        if (pendingView.current !== request) return
+        pendingView.current = null
+        setTc(current => ({ ...current, view: calendarViewMode(surface, current.view) }))
+      }
+      void saveCalendarViewMode(surface, p.view).then(result => {
+        if (!result.ok) refused()
+      }, refused)
+    }
     const { view: _view, ...dates } = p
     const shared = surface ? dates : p
     if (Object.keys(shared).length) void api.workspace.patchTimeControl(shared)

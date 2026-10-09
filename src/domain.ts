@@ -27,8 +27,8 @@ export function createCalendarDomain(owner: OwnerApi, publish: CalendarEventSink
   }
   const read = (api: OwnerApi, startDate?: string, endDate?: string) => readEvents(api, assertActive, startDate, endDate)
   const writable = (record: EventRecord) => {
-    if (record.readOnly || isRemoteEventId(record.id)) throw new Error('This calendar event is read-only.')
-    if (!record.id || !record.title?.trim() || !record.date) throw new Error('Expected an event id, title and date.')
+    if (record.readOnly || isRemoteEventId(record.id)) throw Object.assign(new Error('This calendar event is read-only.'), { code: 'READ_ONLY', outcome: 'not-applied' })
+    if (!record.id || !record.title?.trim() || !record.date) throw Object.assign(new Error('Expected an event id, title and date.'), { code: 'INVALID_INPUT', outcome: 'not-applied' })
   }
   const update = async (api: OwnerApi, id: string, record: EventRecord, expectedUpdatedAt?: string, documentRevision?: Revision, emit = publish) => {
     validateReminders(record)
@@ -89,7 +89,15 @@ export function createCalendarDomain(owner: OwnerApi, publish: CalendarEventSink
       const previous = (await read(api)).find(event => event.id === id)
       if (!previous) return false
       writable(previous)
-      return (await api.data.dataset('calendar.events').delete({ id, ...(expectedUpdatedAt === undefined ? {} : { updatedAt: expectedUpdatedAt }) })).affected > 0
+      const dataset = api.data.dataset('calendar.events')
+      const current = await dataset.read({ id })
+      if (!current.value || (expectedUpdatedAt !== undefined && current.value.updatedAt !== expectedUpdatedAt)) return false
+      try {
+        return (await dataset.delete({ id }, { expected: [{ dataset: 'calendar.events', key: { id }, revision: current.revision }] })).affected > 0
+      } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'conflict' && !('outcomeUnknown' in error && error.outcomeUnknown === true)) return false
+        throw error
+      }
     }),
     dispose: async () => { active = false; await pending.catch(() => {}) }
   }

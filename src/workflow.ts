@@ -1,5 +1,6 @@
 import { startReminderOwner } from './reminderOwner'
-import { registerWorkflowContribution, type PluginBackendApi, type WorkflowContributionContract } from '@valley/plugin-sdk'
+import type { PluginBackendApi } from '@valley/plugin-sdk'
+import { registerWorkflowContribution, type WorkflowContributionContract } from '@valley/plugin-sdk/workflow'
 import type { DataRecord, EventRecord } from '@valley/plugin-sdk/types'
 import { createCalendarDomain } from './domain'
 import { generateId } from './lib'
@@ -49,8 +50,9 @@ export function registerCalendarWorkflow(api: PluginBackendApi): () => Promise<v
       return { id, deleted }
     })
   ]
-  const contract = config.runtime.services[0].metadata.workflow as unknown as WorkflowContributionContract
+  const contract = (config.runtime.services[0] as unknown as { metadata: { workflow: WorkflowContributionContract } }).metadata.workflow
   const contribution = registerWorkflowContribution(api, contract, async ({ nodeTypeId, parameters }, context) => {
+    context.cancellation.throwIfAborted()
     const scoped = context.api
     const emit = (event: string, payload: unknown) => scoped.services.emit('workflow.provider', event, JSON.parse(JSON.stringify(payload)))
     if (nodeTypeId === 'event.list') {
@@ -61,6 +63,12 @@ export function registerCalendarWorkflow(api: PluginBackendApi): () => Promise<v
       if ((start && !validDate(start)) || (end && !validDate(end)) || (start && end && start > end)) throw new Error('Invalid event date range.')
       const records = (await domain.list(start, end, scoped)).filter(record => (!start || (record.endDate ?? record.date) >= start) && (!end || record.date <= end)).slice(0, limit)
       return { items: records.map(record => ({ json: JSON.parse(JSON.stringify(record)) as Record<string, unknown> })) }
+    }
+    if (nodeTypeId === 'event.delete') {
+      const id = text(parameters.id, 'an item id'), expected = text(parameters.expectedUpdatedAt, 'a reviewed modification timestamp')
+      const deleted = await domain.remove(id, scoped, expected)
+      if (!deleted) throw Object.assign(new Error('The item changed or no longer exists'), { code: 'REVISION_CONFLICT', outcome: 'not-applied', fatal: true, transient: false, retryable: false })
+      return { items: [{ json: { id, deleted } }] }
     }
     let record: EventRecord
     if (nodeTypeId === 'event.create') {
@@ -83,5 +91,6 @@ export function registerCalendarWorkflow(api: PluginBackendApi): () => Promise<v
     }
     return { items: [{ json: JSON.parse(JSON.stringify(record)) as Record<string, unknown> }] }
   })
+  void contribution.ready.catch(error => api.rpc.emit('workflow.registrationFailed', { message: error instanceof Error ? error.message : String(error) }))
   return async () => { await offReminders(); contribution.dispose(); offs.forEach(off => off()); await domain.dispose() }
 }

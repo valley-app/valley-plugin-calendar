@@ -1,3 +1,4 @@
+import Ajv from 'ajv'
 import { assertCommandOutput } from './commandContracts'
 import { describe, expect, it, vi } from 'vitest'
 import { createMockValleyApi } from '@valley/plugin-testkit'
@@ -19,10 +20,16 @@ function setup() {
     handle: (method: string, handler: (input: unknown) => unknown) => { handlers.set(method, handler); return () => { handlers.delete(method) } },
     handleOperation: (method: string, handler: (input: unknown, context: PluginBackendOperationContext) => unknown) => { handlers.set(method, async (input, context) => assertCommandOutput(method, input, await handler(input, context!))); return () => { handlers.delete(method) } }
   } } as unknown as PluginBackendApi
+  const schemas = new Map<string, ReturnType<Ajv['compile']>>()
+  api.schema = {
+    compile: async ({ schema }) => { const handle = crypto.randomUUID(); schemas.set(handle, new Ajv({ strict: false, validateFormats: false, allowUnionTypes: true }).compile(schema)); return { handle, digest: handle } },
+    validate: async (request) => { const validate = schemas.get(request.handle)!; return { valid: Boolean(validate('value' in request ? request.value : undefined)), issues: [] } },
+    release: async (handle) => { schemas.delete(handle) }
+  }
   const off = registerCalendarWorkflow(api)
   mock.api.backend.call = async <T>(method: string, payload?: unknown) => await handlers.get(method)!(payload) as T
   const context = { id: 'run-action', cancellation: new AbortController().signal, api: { ...api, services: { emit: scopedEmit } } } as unknown as PluginBackendOperationContext
-  const execute = (nodeTypeId: string, parameters: Record<string, unknown> = {}) => handlers.get('workflow.execute')!({ nodeTypeId, parameters, items: [{ json: {} }] }, context) as Promise<WorkflowExecutionResult>
+  const execute = async (nodeTypeId: string, parameters: Record<string, unknown> = {}) => { await vi.waitFor(() => expect(handlers.has('workflow.execute')).toBe(true)); return handlers.get('workflow.execute')!({ nodeTypeId, parameters, items: [{ json: {} }] }, context) as Promise<WorkflowExecutionResult> }
   return { mock, handlers, emit, scopedEmit, report, off, execute, context }
 }
 
@@ -50,6 +57,41 @@ describe('Calendar workflow contribution', () => {
     expect((await h.execute('event.get', { id: record.id })).items).toHaveLength(1)
     expect(await remove(String(record.updatedAt))).toMatchObject({ id: record.id, deleted: true })
     await expect(h.execute('event.get', { id: record.id })).rejects.toThrow('no longer exists')
+    await h.off()
+  })
+
+  it('deletes by the exact primary key behind a host record-revision fence', async () => {
+    const h = setup()
+    const record = (await h.execute('event.create', { title: 'Survey', date: '2026-10-01' })).items[0].json
+    const kept = (await h.execute('event.create', { title: 'Keep', date: '2026-10-01' })).items[0].json
+    const dataset = h.mock.api.data.dataset('calendar.events'), originalDataset = h.mock.api.data.dataset.bind(h.mock.api.data)
+    vi.spyOn(h.mock.api.data, 'dataset').mockImplementation(id => id === 'calendar.events' ? dataset : originalDataset(id))
+    const remove = vi.spyOn(dataset, 'delete'), baseline = await dataset.read({ id: String(record.id) })
+    const run = (expectedUpdatedAt: string) => h.handlers.get('command.event.delete')!({ id: record.id, expectedUpdatedAt }, h.context)
+    await expect(run('outdated')).rejects.toMatchObject({ code: 'REVISION_CONFLICT', outcome: 'not-applied' })
+    expect(remove).not.toHaveBeenCalled()
+    expect(await run(String(record.updatedAt))).toEqual({ id: record.id, deleted: true })
+    expect(remove).toHaveBeenCalledWith({ id: record.id }, { expected: [{ dataset: 'calendar.events', key: { id: record.id }, revision: baseline.revision }] })
+    await expect(h.execute('event.get', { id: record.id })).rejects.toThrow('no longer exists')
+    expect((await h.execute('event.get', { id: kept.id })).items[0].json).toMatchObject({ title: 'Keep' })
+    await h.off()
+  })
+
+  it('refuses a concurrent edit between the timestamp check and deletion, and keeps unknown outcomes unknown', async () => {
+    const h = setup()
+    const record = (await h.execute('event.create', { title: 'Survey', date: '2026-10-01' })).items[0].json
+    const dataset = h.mock.api.data.dataset('calendar.events'), originalDataset = h.mock.api.data.dataset.bind(h.mock.api.data), originalDelete = dataset.delete.bind(dataset)
+    vi.spyOn(h.mock.api.data, 'dataset').mockImplementation(id => id === 'calendar.events' ? dataset : originalDataset(id))
+    const remove = vi.spyOn(dataset, 'delete').mockImplementationOnce(async (key, options) => {
+      await dataset.update({ id: String(record.id) }, { title: 'Concurrent edit' })
+      return originalDelete(key, options)
+    })
+    const run = () => h.handlers.get('command.event.delete')!({ id: record.id, expectedUpdatedAt: record.updatedAt }, h.context)
+    await expect(run()).rejects.toMatchObject({ code: 'REVISION_CONFLICT', outcome: 'not-applied' })
+    expect((await h.execute('event.get', { id: record.id })).items[0].json).toMatchObject({ title: 'Concurrent edit' })
+    const unknown = Object.assign(new Error('Acknowledgment lost'), { code: 'conflict', outcomeUnknown: true })
+    remove.mockRejectedValueOnce(unknown)
+    await expect(run()).rejects.toBe(unknown)
     await h.off()
   })
 

@@ -18,13 +18,15 @@ export function dailyNoteDate(path: string, folder: string): string | null {
   return match && isRealCalendarDate(Number(match[1]), Number(match[2]), Number(match[3])) ? name.slice(0, 10) : null
 }
 
-export async function openDailyNote(date: string): Promise<void> {
+export async function openDailyNote(date: string, validateBeforeEffect?: (path: string) => Promise<void>): Promise<void> {
   const folder = calendarFolder('dailyNotesFolder')
   const path = `${folder}/${date}.md`
   if (!dailyNoteDate(path, folder)) throw new Error(uiText('calendar.daily.invalid'))
   if (!await api.vault.stat(path)) {
+    await validateBeforeEffect?.(path)
     const result = await api.vault.createTextDocumentGuarded(path, `# ${date}\n\n`)
     if (!result.ok && !await api.vault.stat(path)) throw new Error(uiText('calendar.error.save'))
   }
+  await validateBeforeEffect?.(path)
   api.workspace.openFile(path)
 }

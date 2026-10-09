@@ -34,6 +34,7 @@ import { calendarAgentTools } from './agentTools'
 import { startGroupUsageReporting } from './groups'
 import { calendarLinkPatch } from './timeControl'
 import { registerCalendarSurfaces } from './surfaces'
+import { registerCalendarFileCommands } from './fileViewCommands'
 
 export function register(api: ValleyPluginApi): () => Promise<void> {
   initLocalization(api)
@@ -72,6 +73,7 @@ export function register(api: ValleyPluginApi): () => Promise<void> {
   const offGroupUsage = startGroupUsageReporting()
 
   const offCommands = registerCalendarCommands(api)
+  const offFileCommands = registerCalendarFileCommands(api)
   const offSurfaces = registerCalendarSurfaces(api)
   const offAgentTools = api.interop.services.provide(AGENT_TOOL_PROVIDER_V1, calendarAgentTools(api))
   const offFence = registerCalendarFence()
@@ -102,6 +104,7 @@ export function register(api: ValleyPluginApi): () => Promise<void> {
     try {
       offDeliveryWarning()
       offCommands()
+      offFileCommands()
       offSurfaces()
       offAgentTools()
       offFence()

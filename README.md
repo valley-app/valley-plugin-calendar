@@ -78,3 +78,5 @@ Source icons live in `.valley/assets/icon/calendar-icon/`. Missing bundled SVGs 
 The backend publishes `workflow.provider` version `1.0.0` through the injected SDK. Actions create, get, list, and update Calendar's local events; creation and update triggers contain `record`. Calendar file occurrences, note-date matches, and items contributed by other plugins remain owned by their existing sources and are outside these actions.
 
 The interface and Workflow use the same serialized backend writer. Revision-guarded document updates preserve event relationships, while existing undo and readonly rules remain in effect. Events follow successful commits and retain the host's causal context. A Workflow action with a delivery failure after commit reports an uncertain outcome and must not be retried automatically. Interface saves retain their successful result and undo entry, with a separate event-delivery warning. Calendar must be installed and enabled; integrations never read another plugin's data files.
+
+Event list already emits one execution item per local event. No collection selector is declared; reminders, tags, URLs and attachments remain event attributes.

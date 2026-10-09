@@ -2,7 +2,8 @@ import { deleteCalendarFileEntry } from './calendarFiles'
 import { openDailyNote } from './dailyNotes'
 import { React, api } from './runtime'
 import type { ReactElement } from 'react'
-import type { MainWorkspaceNavigation } from '@valley/plugin-sdk'
+import type { MainWorkspaceNavigation, MountedPluginView } from '@valley/plugin-sdk'
+import { useCalendarFileEditor } from './calendarEditor'
 import {
   CALENDAR_PANEL_SELECTION_V1,
   type CalendarPanelSelection,
@@ -41,6 +42,7 @@ import { CalendarDays, ChevronRight, Clock, Plus, Trash, X } from './icons'
 import { uiText } from './localization'
 import { revealTargetStore } from './runtime'
 import { selectCalendarProperties, useCalendarSurface } from './surfaces'
+import { useCalendarFileActions } from './fileViewCommands'
 
 // Re-exports kept stable for the Panel/Page/Agenda views and tests.
 export { sourcedToItem, eventToItem, type CalItem } from './items'
@@ -97,12 +99,15 @@ function useRevealTarget(): CalendarRevealTarget | null {
 export function Calendar({
   variant = 'main',
   filePath,
+  mountedView,
   navigation
 }: {
   variant?: 'main' | 'right'
   filePath?: string
+  mountedView?: MountedPluginView
   navigation?: MainWorkspaceNavigation
 }): ReactElement {
+  const fileEditor = useCalendarFileEditor(filePath, mountedView)
   const today = new Date()
   const weekStartPref = useHostField('weekStart')
   const {
@@ -201,7 +206,10 @@ export function Calendar({
   })
   const [quickAdd, setQuickAddState] = React.useState<QuickAddState | null>(null)
   const anchor = React.useRef({ x: 24, y: 76 })
-  const setQuickAdd = (value: QuickAddState | null): void => setQuickAddState(value ? { ...value, sourceFilePath: filePath, anchor: anchor.current } : null)
+  const setQuickAdd = (value: QuickAddState | null): void => {
+    if (value && fileEditor?.locked) return
+    setQuickAddState(value ? { ...value, sourceFilePath: filePath, anchor: anchor.current } : null)
+  }
   const [selectedItemKey, setSelectedItemKey] = React.useState<string | null>(null)
   const rootRef = React.useRef<HTMLDivElement>(null)
   const menuRequestRef = React.useRef(0)
@@ -519,6 +527,24 @@ export function Calendar({
       cursor: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
     })
 
+  useCalendarFileActions(fileEditor ? mountedView : undefined, 'view', {
+    snapshot: () => ({ view, cursor, selectedDate: tc.selectedDate, rangeStart: tc.rangeStart, rangeEnd: tc.rangeEnd, canGoBack: historyState.index > 0, canGoForward: historyState.index < historyState.entries.length - 1, selectedItemKey,
+      items: items.map(item => ({ key: calendarItemKey(item), title: item.title, date: item.date, readOnly: item.readOnly ?? false })), editor: fileEditor!.getSnapshot() }),
+    actions: {
+      view: action => { if (action.type === 'view') setView(action.view) }, previous: () => step(-1), next: () => step(1), today: goToday,
+      'select-date': action => { if (action.type === 'select-date') pickWeekDay(parseLocalDate(action.date)) },
+      'select-week': action => { if (action.type === 'select-week') pickWeek(parseLocalDate(action.date)) },
+      range: action => { if (action.type === 'range') patch({ rangeStart: action.start, rangeEnd: action.end }) },
+      'history-back': () => { if (historyState.index <= 0) throw Object.assign(new Error('No Calendar history is available before this view.'), { outcome: 'not-applied' }); goHistory(-1) },
+      'history-forward': () => { if (historyState.index >= historyState.entries.length - 1) throw Object.assign(new Error('No Calendar history is available after this view.'), { outcome: 'not-applied' }); goHistory(1) },
+      'open-daily-note': async (action, context) => { if (action.type === 'open-daily-note') await openDailyNote(action.date, path => context.validate([{ kind: 'file', path, fileOperation: 'write' }])) },
+      'open-editor': action => { if (action.type === 'open-editor') { if (quickAdd || !fileEditor || fileEditor.locked || fileEditor.getSnapshot().readiness !== 'ready') throw Object.assign(new Error('The Calendar file editor is unavailable or already open.'), { outcome: 'not-applied' }); openQuickAdd(parseLocalDate(action.date), action.start, action.end, 'event') } },
+      'select-item': action => { if (action.type === 'select-item') { const item = items.find(item => calendarItemKey(item) === action.key); if (!item) throw Object.assign(new Error('The Calendar item is no longer available in this file view.'), { outcome: 'not-applied' }); setSelectedItemKey(action.key); selectCalendarProperties(item, surface) } },
+      'edit-item': action => { if (action.type === 'edit-item') { const item = items.find(item => calendarItemKey(item) === action.key); if (!item?.file || item.file.path !== filePath || item.readOnly || quickAdd || fileEditor?.locked) throw Object.assign(new Error('This exact Calendar file item cannot be edited now.'), { outcome: 'not-applied' }); editItem(item) } },
+      'delete-item': async (action, context) => { if (action.type === 'delete-item') { const item = items.find(item => calendarItemKey(item) === action.key); if (!item?.file || item.file.path !== filePath || item.readOnly || quickAdd || fileEditor?.locked) throw Object.assign(new Error('This exact Calendar file item cannot be deleted now.'), { outcome: 'not-applied' }); await deleteCalendarFileEntry(item.file, () => context.validate()) } }
+    }
+  })
+
   const switcherButtons = (['week', 'month', 'year'] as CalendarViewMode[]).map((mode) => (
     <button
       key={mode}
@@ -654,6 +680,8 @@ export function Calendar({
           key={quickAdd.editItem?.id ?? `new:${quickAdd.kind ?? ''}:${quickAdd.date}:${quickAdd.startTime ?? ''}`}
           state={quickAdd}
           groups={calendarGroups}
+          fileEditor={fileEditor}
+          mountedView={mountedView}
 
           onClose={() => setQuickAdd(null)}
           onAdded={() => { /* data hook reloads on change */ }}

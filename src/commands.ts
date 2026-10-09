@@ -3,15 +3,47 @@
  * it uses the **raw** event op and returns a `revert`, so the bus owns the single
  * ⌘Z entry. The navigation commands (goto/set-view/today) drive the shared time
  * selection via `api.workspace.patchTimeControl` and return the new
- * `TimeControlState`; `list` returns structured `EventRecord[]`. All of those are
- * `read` (ephemeral / query, not undoable).
+ * `TimeControlState`; `list` returns structured `EventRecord[]`. The navigation
+ * commands persist the shared selection, so they are non-undoable `write`s
+ * (`revert: null`); the query commands are `read`.
  */
 import type { CalendarViewMode, EventRecord, TimeControlState, DataRecord } from '@valley/plugin-sdk/types'
-import type { ValleyPluginApi, CalendarItemPatch } from '@valley/plugin-sdk'
+import type { PluginCommand, ValleyPluginApi, CalendarItemPatch } from '@valley/plugin-sdk'
+import type { CommandSideEffect } from '@valley/plugin-sdk/commands'
 import { loadEvents, newEvent, normalizeEventRecord, rawAppend, rawDelete, rawUpdate } from './events'
 import { listSourcedItems, sourceDescriptors, sourcedItemActions, updateSourcedItem, removeSourcedItem, createSourcedItem, runSourcedItemAction } from './itemSources'
 import { eventToItem, sourcedToItem, requestCalendarItemEdit, type CalItem } from './items'
 import { addDays, daysBetween } from './dateMath'
+
+const resultText = { type: 'string', maxLength: 65536 }
+const resultBoolean = { type: 'boolean' }
+const resultObject = (properties: Record<string, unknown>, required = Object.keys(properties)): Record<string, unknown> => ({ type: 'object', properties, required, additionalProperties: false })
+const resultList = (items: Record<string, unknown>, maxItems = 1000): Record<string, unknown> => ({ type: 'array', items, maxItems })
+const resultNullable = (schema: Record<string, unknown>): Record<string, unknown> => ({ anyOf: [schema, { type: 'null' }] })
+const resultLocation = resultObject({ name: resultText, lng: { type: 'number', minimum: -180, maximum: 180 }, lat: { type: 'number', minimum: -90, maximum: 90 } }, ['name'])
+const resultFields = resultList(resultObject({ key: resultText, value: resultText }))
+const resultBadges = resultList({ enum: ['note', 'link', 'attachment', 'location'] }, 4)
+const eventResult = resultObject({
+  ...Object.fromEntries(['id', 'title', 'date', 'endDate', 'startTime', 'endTime', 'color', 'category', 'groupId', 'group', 'note', 'filePath', 'createdAt', 'updatedAt', 'source', 'accountId', 'calendarId', 'reminderTime'].map(key => [key, resultText])),
+  allDay: resultBoolean, readOnly: resultBoolean, reminderOffsets: resultList({ type: 'number' }), tags: resultList(resultText), urls: resultList(resultText), attachments: resultList(resultText), location: resultLocation
+}, ['id', 'title', 'date', 'tags', 'note', 'createdAt', 'updatedAt'])
+const sourceResult = resultObject({
+  ...Object.fromEntries(['id', 'title', 'date', 'endDate', 'startTime', 'endTime', 'filePath', 'note', 'priority', 'status', 'group', 'color', 'borderColor', 'icon'].map(key => [key, resultText])),
+  completed: resultBoolean, readOnly: resultBoolean, tags: resultList(resultText), urls: resultList(resultText), attachments: resultList(resultText), location: resultLocation, fields: resultFields, badges: resultBadges,
+  documentRef: resultObject({ pluginId: resultText, sourceId: resultText, itemId: resultText })
+}, ['id', 'title', 'date'])
+const itemResult = resultObject({
+  ...Object.fromEntries(['id', 'title', 'date', 'endDate', 'occurrenceKey', 'startTime', 'endTime', 'timeZone', 'filePath', 'sourceId', 'sourceOwner', 'sourceLabelKey', 'note', 'category', 'groupId', 'group', 'priority', 'status', 'color', 'borderColor', 'icon'].map(key => [key, resultText])),
+  kind: { enum: ['event', 'sourced'] }, completed: resultBoolean, readOnly: resultBoolean, event: eventResult, sourced: sourceResult, tags: resultList(resultText), urls: resultList(resultText), attachments: resultList(resultText), location: resultLocation, fields: resultFields, badges: resultBadges
+}, ['kind', 'id', 'title', 'date'])
+const actionResult = (depth: number): Record<string, unknown> => resultObject({ id: resultText, label: resultText, labelKey: resultText, description: resultText, icon: { enum: ['note', 'attachment', 'link', 'map', 'edit', 'open', 'checklist'] }, danger: resultBoolean, enabled: resultBoolean, ...(depth ? { submenu: resultList(actionResult(depth - 1), 100) } : {}) }, ['id', 'label'])
+const integrationResult = resultObject({ name: resultText, description: resultText, version: resultText, author: resultText, localized: resultObject(Object.fromEntries(['en', 'de', 'es', 'fr', 'zh-CN'].map(key => [key, resultObject({ name: resultText, description: resultText }, ['name'])])), []) }, ['name', 'version'])
+const timeResult = resultObject({ view: { enum: ['month', 'week', 'year'] }, cursor: resultText, selectedDate: resultNullable(resultText), rangeStart: resultNullable(resultText), rangeEnd: resultNullable(resultText), selectedTime: resultNullable(resultText), timeRange: resultNullable(resultObject({ start: resultText, end: resultText })) })
+export const calendarResults: Record<string, Record<string, unknown>> = {
+  'list-items': resultList(itemResult, 10000), 'source-actions': resultList(actionResult(3), 100), get: itemResult, open: itemResult, 'edit-fields': itemResult, delete: itemResult,
+  sources: resultList(resultObject({ sourceId: resultText, sourceKey: resultText, owner: resultText, version: resultText, methods: resultList(resultText, 100), integration: integrationResult }, ['sourceId', 'sourceKey', 'owner', 'version', 'methods']), 1000),
+  'source-create': { const: true }, 'source-action': { const: true }, 'open-page': { type: 'null' }, add: eventResult, goto: timeResult, 'set-view': timeResult, today: timeResult, list: resultList(eventResult, 10000)
+}
 
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '')
 
@@ -106,16 +138,24 @@ export async function calendarCommandRevision(raw: unknown): Promise<unknown> {
 
 /** Register every `calendar:*` command; returns a combined disposer. */
 export function registerCalendarCommands(api: ValleyPluginApi): () => void {
+  const register = <I = void, O = void, E extends CommandSideEffect = 'read'>(definition: PluginCommand<I, O, E>): (() => void) => {
+    const outputSchema = calendarResults[definition.id]
+    if (!outputSchema) throw new Error(`Missing result contract for ${definition.id}.`)
+    const command: PluginCommand<I, O, E> & { outputSchema: Record<string, unknown>; limits: Record<string, number> } = { ...definition, outputSchema, limits: { requestBytes: 1048576, responseBytes: 1048576 } }
+    return api.commands.register(command)
+  }
+  const selectionPatch = (date: string): Pick<TimeControlState, 'cursor' | 'selectedDate'> => ({ cursor: monthAnchor(date), selectedDate: date })
+  const timeControlRevision = async (): Promise<string> => JSON.stringify(await api.workspace.getTimeControl())
   const offs = [
-    api.commands.register({ id: 'list-items', label: 'Calendar: List all items', labelKey: 'calendar.command.listItems', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { from: eventText, to: eventText, sourceId: eventText }, additionalProperties: false }, parse: (raw) => { const input = (raw ?? {}) as Record<string, unknown>; for (const key of ['from', 'to', 'sourceId']) if (input[key] !== undefined && typeof input[key] !== 'string') throw new Error('Expected calendar filter text.'); return { from: asStr(input.from), to: asStr(input.to), sourceId: asStr(input.sourceId) } } }, run: async ({ from, to, sourceId }) => {
+    register({ id: 'list-items', label: 'Calendar: List all items', labelKey: 'calendar.command.listItems', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { from: eventText, to: eventText, sourceId: eventText }, additionalProperties: false }, parse: (raw) => { const input = (raw ?? {}) as Record<string, unknown>; for (const key of ['from', 'to', 'sourceId']) if (input[key] !== undefined && typeof input[key] !== 'string') throw new Error('Expected calendar filter text.'); return { from: asStr(input.from), to: asStr(input.to), sourceId: asStr(input.sourceId) } } }, run: async ({ from, to, sourceId }) => {
       const local = (await loadEvents()).map(eventToItem)
       const contributed = (await listSourcedItems(true, from || '0001-01-01', to || '9999-12-31')).map(sourcedToItem)
       return [...local, ...contributed].filter((item) => (!from || (item.endDate ?? item.date) >= from) && (!to || item.date <= to) && (!sourceId || item.sourceId === sourceId))
     } }),
-    api.commands.register({ id: 'source-actions', label: 'Calendar: List source item actions', labelKey: 'calendar.command.sourceActions', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id', 'sourceId'], additionalProperties: false }, parse: (raw) => { const target = parseCalendarTarget(raw); if (!target.sourceId) throw new Error('Expected a source id.'); return { id: target.id, sourceId: target.sourceId } } }, run: async ({ id, sourceId }) => { await resolveCalendarTarget({ id, sourceId }); return sourcedItemActions(sourceId, id) } }),
-    api.commands.register({ id: 'get', label: 'Calendar: Get item', labelKey: 'calendar.command.get', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id'], additionalProperties: false }, parse: parseCalendarTarget }, run: resolveCalendarTarget }),
-    api.commands.register({ id: 'open', label: 'Calendar: Open item', labelKey: 'calendar.command.open', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id'], additionalProperties: false }, parse: parseCalendarTarget }, run: async (target) => { const item = await resolveCalendarTarget(target); requestCalendarItemEdit(item); return item } }),
-    api.commands.register({
+    register({ id: 'source-actions', label: 'Calendar: List source item actions', labelKey: 'calendar.command.sourceActions', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id', 'sourceId'], additionalProperties: false }, parse: (raw) => { const target = parseCalendarTarget(raw); if (!target.sourceId) throw new Error('Expected a source id.'); return { id: target.id, sourceId: target.sourceId } } }, run: async ({ id, sourceId }) => { await resolveCalendarTarget({ id, sourceId }); return sourcedItemActions(sourceId, id) } }),
+    register({ id: 'get', label: 'Calendar: Get item', labelKey: 'calendar.command.get', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id'], additionalProperties: false }, parse: parseCalendarTarget }, run: resolveCalendarTarget }),
+    register({ id: 'open', label: 'Calendar: Open item', labelKey: 'calendar.command.open', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id'], additionalProperties: false }, parse: parseCalendarTarget }, run: async (target) => { const item = await resolveCalendarTarget(target); requestCalendarItemEdit(item); return item } }),
+    register({
       id: 'edit-fields',
       label: 'Calendar: Edit item fields',
       labelKey: 'calendar.command.editFields',
@@ -126,7 +166,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       revision: (input) => calendarCommandRevision(input),
       preview: (input) => ({ changes: input })
     }),
-    api.commands.register({
+    register({
       id: 'delete',
       label: 'Calendar: Delete item',
       labelKey: 'calendar.command.delete',
@@ -143,8 +183,8 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       revision: (input) => calendarCommandRevision(input),
       preview: (input) => ({ changes: input })
     }),
-    api.commands.register({ id: 'sources', label: 'Calendar: List item sources', labelKey: 'calendar.command.sources', paletteSafe: false, sideEffect: 'read', run: () => sourceDescriptors() }),
-    api.commands.register({
+    register({ id: 'sources', label: 'Calendar: List item sources', labelKey: 'calendar.command.sources', paletteSafe: false, sideEffect: 'read', run: () => sourceDescriptors() }),
+    register({
       id: 'source-create',
       label: 'Calendar: Create source item',
       labelKey: 'calendar.command.sourceCreate',
@@ -155,7 +195,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       revision: (input) => calendarCommandRevision(input),
       preview: (input) => ({ changes: input })
     }),
-    api.commands.register({
+    register({
       id: 'source-action',
       label: 'Calendar: Run source item action',
       labelKey: 'calendar.command.sourceAction',
@@ -167,18 +207,18 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       preview: (input) => ({ changes: input })
     }),
 
-    api.commands.register({
+    register({
       id: 'open-page',
       label: 'Open Calendar page', labelKey: 'auto.b29a9852d77e',
       sideEffect: 'read',
       run: () => {
         api.workspace.openMainTab()
-        return undefined
+        return null
       },
       formatCli: () => 'Opened calendar page.'
     }),
 
-    api.commands.register({
+    register({
       id: 'add',
       label: 'Calendar: Add an event',
       labelKey: 'auto.e16f07326a18',
@@ -226,11 +266,11 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       preview: (input) => ({ changes: input })
     }),
 
-    api.commands.register({
+    register({
       id: 'goto',
       label: 'Calendar: Go to date', labelKey: 'auto.bf2660184858',
       paletteSafe: false,
-      sideEffect: 'read',
+      sideEffect: 'write',
       input: {
         schema: {"type":"object","properties":{"date":{"type":"string"}},"required":["date"],"additionalProperties":false},
         parse: (raw) => {
@@ -240,12 +280,13 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
         },
         fromCli: (args) => ({ date: args[0] })
       },
-      run: ({ date }): TimeControlState =>
-        api.workspace.patchTimeControl({ cursor: monthAnchor(date), selectedDate: date }),
+      run: ({ date }) => ({ value: api.workspace.patchTimeControl(selectionPatch(date)), revert: null }),
+      revision: () => timeControlRevision(),
+      preview: ({ date }) => selectionPatch(date),
       formatCli: (tc) => `Calendar at ${tc.selectedDate ?? tc.cursor} (${tc.view})`
     }),
 
-    api.commands.register({
+    register({
       id: 'set-view',
       label: 'Calendar: Set view', labelKey: 'auto.7f852a5678f1',
       paletteSafe: false,
@@ -268,18 +309,17 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       formatCli: (tc) => `Calendar view: ${tc.view}`
     }),
 
-    api.commands.register({
+    register({
       id: 'today',
       label: 'Calendar: Go to today', labelKey: 'auto.ee8581831b9c',
-      sideEffect: 'read',
-      run: (): TimeControlState => {
-        const today = todayIso()
-        return api.workspace.patchTimeControl({ cursor: monthAnchor(today), selectedDate: today })
-      },
+      sideEffect: 'write',
+      run: () => ({ value: api.workspace.patchTimeControl(selectionPatch(todayIso())), revert: null }),
+      revision: () => timeControlRevision(),
+      preview: () => selectionPatch(todayIso()),
       formatCli: (tc) => `Calendar at ${tc.selectedDate ?? tc.cursor} (${tc.view})`
     }),
 
-    api.commands.register({
+    register({
       id: 'list',
       label: 'Calendar: List events', labelKey: 'auto.05d290d65a74',
       paletteSafe: false,

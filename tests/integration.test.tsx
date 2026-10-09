@@ -846,6 +846,47 @@ describe('Calendar period transitions', () => {
 })
 
 describe('independent Calendar views', () => {
+  it('keeps a pending Month selection through unrelated settings notifications and date selection', async () => {
+    const mock = setupCalendarApi({ settings: { mainView: 'year', sidebarView: 'week' } })
+    await patchTimeControl({ cursor: '2026-10-01', selectedDate: '2026-10-15' })
+    const save = mock.api.settings.set.bind(mock.api.settings)
+    let finish!: () => Promise<void>
+    vi.spyOn(mock.api.settings, 'set').mockImplementation((key, value) => key === 'mainView'
+      ? new Promise(resolve => { finish = async () => { resolve(await save(key, value)) } })
+      : save(key, value))
+    const { container } = render(<Calendar />)
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Year' })).toHaveClass('active'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Month' }))
+    expect(screen.getByRole('tab', { name: 'Month' })).toHaveClass('active')
+    await act(async () => { await save('sidebarView', 'month') })
+    expect(screen.getByRole('tab', { name: 'Month' })).toHaveClass('active')
+    const day = [...container.querySelectorAll('.calendar-day-cell:not(.outside)')]
+      .find(node => node.querySelector('.calendar-day-num')?.textContent === '18')!
+    await act(async () => fireEvent.click(day))
+    expect((await readTimeControl()).selectedDate).toBe('2026-10-18')
+    await act(async () => { await finish() })
+    expect(screen.getByRole('tab', { name: 'Month' })).toHaveClass('active')
+    expect(mock.api.settings.get().mainView).toBe('month')
+  })
+
+  it('keeps the latest requested view during older acknowledgements and restores the saved view after refusal', async () => {
+    const mock = setupCalendarApi({ settings: { mainView: 'month' } })
+    const save = mock.api.settings.set.bind(mock.api.settings)
+    const pending: Array<(accepted: boolean) => Promise<void>> = []
+    vi.spyOn(mock.api.settings, 'set').mockImplementation((key, value) => key === 'mainView'
+      ? new Promise(resolve => { pending.push(async accepted => { resolve(accepted ? await save(key, value) : { ok: false, error: 'Save refused' }) }) })
+      : save(key, value))
+    render(<Calendar />)
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Month' })).toHaveClass('active'))
+    fireEvent.click(screen.getByRole('tab', { name: 'Year' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+    await act(async () => { await pending[0](true) })
+    expect(screen.getByRole('tab', { name: 'Week' })).toHaveClass('active')
+    await act(async () => { await pending[1](false) })
+    expect(screen.getByRole('tab', { name: 'Year' })).toHaveClass('active')
+    expect(mock.api.settings.get().mainView).toBe('year')
+  })
+
   it('keeps main and sidebar modes separate across selection, bookmarks and remounting', async () => {
     const mock = setupCalendarApi({ settings: { mainView: 'week', sidebarView: 'month' } })
     patchTimeControl({ view: 'month', cursor: '2026-09-01', selectedDate: '2026-09-29' })
@@ -1474,11 +1515,11 @@ describe('AgendaPanel item clicks', () => {
     flushTimeControl()
   })
 
-  it('keeps source, group, and note-date header filters icon-only', async () => {
+  it('keeps source and group header filters icon-only beside the separate Note dates section', async () => {
     await act(async () => render(React.createElement(AgendaPanel)))
 
     const sources = await screen.findByRole('button', { name: 'Sources' })
-    for (const label of ['Sources', 'Groups', 'Note dates']) {
+    for (const label of ['Sources', 'Groups']) {
       const button = screen.getByRole('button', { name: label })
       expect(button.textContent).toBe('')
       expect(button.querySelector('svg')).toBeInTheDocument()
@@ -1503,7 +1544,7 @@ describe('AgendaPanel item clicks', () => {
     expect(sources.textContent).toBe('')
   })
 
-  it('filters individual note-date sources from the Agenda header', async () => {
+  it('filters individual note-date sources from the expandable Agenda section', async () => {
     mock = setupCalendarApi({
       indexEntries: [
         { relPath: 'Contacts/Fern.md', title: 'Fern', kind: 'note', frontmatter: { type: 'contact', birthdate: '1990-05-04' }, mtimeMs: 0 },
@@ -1517,21 +1558,18 @@ describe('AgendaPanel item clicks', () => {
     await act(async () => render(React.createElement(AgendaPanel)))
 
     const button = await screen.findByRole('button', { name: 'Note dates' })
-    expect(button.textContent).toBe('')
-    expect(button).toHaveClass('active')
-    expect(button.querySelector('.calendar-filter-icon path')).toHaveAttribute('d', 'M14 4v5c0 1.12.37 2.16 1 3H9c.65-.86 1-1.9 1-3V4zm3-2H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3V4h1c.55 0 1-.45 1-1s-.45-1-1-1')
+    expect(button).toHaveAttribute('aria-expanded', 'false')
     await act(async () => fireEvent.click(button))
-    let popover: ReturnType<typeof render>
-    await act(async () => { popover = render(React.createElement(React.Fragment, null, mock.popovers.at(-1)?.node)) })
-    const rows = [...popover!.container.querySelectorAll<HTMLButtonElement>('.calendar-filter-option')]
-    expect(rows.map((row) => row.querySelector('.calendar-filter-option-label')?.textContent)).toEqual(['Birthdays', 'Deadlines'])
-    expect(rows.map((row) => row.querySelector('.calendar-filter-option-count')?.textContent)).toEqual(['1', '1'])
-    expect(rows.map((row) => row.getAttribute('aria-pressed'))).toEqual(['true', 'false'])
-
-    await act(async () => fireEvent.click(rows[1]))
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+    const rows = [...document.querySelectorAll('.notedate-sidebar-source')]
+    expect(rows.map(row => row.querySelector('.notedate-sidebar-title')?.textContent)).toEqual(['Birthdays', 'Deadlines'])
+    expect(rows.map(row => row.querySelector('.calendar-filter-option-count')?.textContent)).toEqual(['1', '1'])
+    expect(screen.getByRole('switch', { name: 'Birthdays' })).toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Deadlines' })).not.toBeChecked()
+    await act(async () => fireEvent.click(screen.getByRole('switch', { name: 'Deadlines' })))
     await waitFor(() => expect(mock.datasets.get('calendar.note_date_sources')?.find((row) => row.id === 'deadlines')?.definition).toMatchObject({ visible: true }))
-    expect(button.textContent).toBe('')
-    expect(button).not.toHaveClass('active')
+    expect(screen.getByRole('switch', { name: 'Deadlines' })).toBeChecked()
+    expect(button).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('uses only the completion control for contributed tasks in Agenda', async () => {
@@ -1950,7 +1988,7 @@ describe('Note dates settings section', () => {
     })
   })
 
-  it('reports what each rule finds, and warns when it finds nothing', async () => {
+  it('reports matches and keeps empty note sources neutral', async () => {
     const specimen = (relPath: string, frontmatter: Record<string, unknown>): IndexEntry => ({
       relPath,
       title: relPath.replace(/\.md$/, ''),
@@ -1997,8 +2035,8 @@ describe('Note dates settings section', () => {
       expect(el).toBeInTheDocument()
       return el as HTMLElement
     })
-    expect(warn.textContent).toBe('No notes match type: animals')
-    expect(warn).toHaveClass('warn')
+    expect(warn.textContent).toBe('0 notes found')
+    expect(warn).not.toHaveClass('warn')
 
     // Matching notes, but the date property does not exist on them.
     cleanup()
@@ -2024,6 +2062,7 @@ describe('Note dates settings section', () => {
     })
     render(React.createElement(CalendarSettings, { section: 'dates' }))
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Details: Emergence dates' }))
     const end = await screen.findByRole('spinbutton', { name: 'Recurring date range in years' })
     expect(end).toHaveValue(null)
     fireEvent.change(end, { target: { value: '4' } })
@@ -2051,6 +2090,7 @@ describe('Note dates settings section', () => {
         }]
     })
     render(React.createElement(CalendarSettings, { section: 'dates' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Details: Deadline' }))
     await screen.findByDisplayValue('Deadline')
     expect(screen.queryByRole('spinbutton', { name: 'Recurring date range in years' })).not.toBeInTheDocument()
   })
