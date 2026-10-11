@@ -35,8 +35,9 @@ export interface CalendarFileViewState {
 export interface CalendarFileFormState {
   title: string; date: string; endDate: string; start: string; end: string; allDay: boolean; location: EventLocation | null; tags: string[]; note: string; urls: string[]; attachments: string[]; filePath: string; details: boolean; recurrenceScope: 'occurrence' | 'series'; busy: boolean; frozen: boolean; readOnly: boolean; isNew: boolean
 }
-export interface CalendarFileActionContext { validate(targets?: CommandFileTarget[]): Promise<void> }
-export interface CalendarFileController { snapshot(): CalendarFileViewState | CalendarFileFormState; actions: Partial<Record<CalendarFileAction['type'], (action: CalendarFileAction, context: CalendarFileActionContext) => void | Promise<unknown>>> }
+export interface CalendarFileActionContext { validate(targets?: CommandFileTarget[]): Promise<void>; targets: readonly CommandFileTarget[] }
+/** `targets` declares the extra vault files an action reads or writes besides the mounted file; the command's fileTargets resolver publishes them, so `validate()` re-checks exactly the declared set. */
+export interface CalendarFileController { snapshot(): CalendarFileViewState | CalendarFileFormState; actions: Partial<Record<CalendarFileAction['type'], (action: CalendarFileAction, context: CalendarFileActionContext) => void | Promise<unknown>>>; targets?: Partial<Record<CalendarFileAction['type'], (action: CalendarFileAction) => CommandFileTarget[] | Promise<CommandFileTarget[]>>> }
 interface Entry { target: MountedPluginView; controllers: Map<'view' | 'form', { token: symbol; current: CalendarFileController }>; revision: string; signature: string; pending: boolean }
 const runtimeState = (ownerApi = api) => ownerApi.runtime.getOrCreate('calendar.fileActions', () => ({ owners: new Map<string, Entry>(), id: crypto.randomUUID(), sequence: 0 }))
 const keyOf = (target: Pick<MountedPluginView, 'mountId' | 'generation'>): string => JSON.stringify([target.mountId, target.generation])
@@ -57,6 +58,8 @@ function time(raw: unknown): string { const value = boundedText(raw, 5); if (val
 const controlTypes = ['view', 'previous', 'next', 'today', 'history-back', 'history-forward', 'select-date', 'select-week', 'range', 'select-item', 'form-patch', 'url-add', 'url-remove', 'attachment-add', 'attachment-remove']
 const executeTypes = ['open-daily-note', 'open-editor', 'edit-item', 'cancel', 'url-open', 'attachment-open']
 const saveTypes = ['save', 'delete-item']
+// Openers hand off to another surface that may unmount this view; their own resolution is the outcome, checked for currency before the handoff.
+const openerTypes = ['url-open', 'attachment-open', 'open-daily-note']
 function parseAction(raw: unknown, types: readonly string[]): CalendarFileAction {
   const type = record(raw, ['type', 'view', 'date', 'start', 'end', 'key', 'patch', 'value'], ['type']).type
   if (typeof type !== 'string' || !types.includes(type)) throw new Error('This action is unavailable through this Calendar command effect.')
@@ -114,7 +117,7 @@ export function useCalendarFileActions(target: MountedPluginView | undefined, pa
     let entry = state.owners.get(key)
     if (!entry) { entry = { target, controllers: new Map(), revision: nextRevision(ownerApi), signature: '', pending: false }; state.owners.set(key, entry) }
     if (entry.controllers.has(part)) throw new Error('This exact Calendar controller is already registered.')
-    entry.controllers.set(part, { token, current: { snapshot: () => latest.current.snapshot(), actions: Object.fromEntries(Object.keys(controller.actions).map(type => [type, (action: CalendarFileAction, context: CalendarFileActionContext) => latest.current.actions[action.type]?.(action, context)])) } })
+    entry.controllers.set(part, { token, current: { snapshot: () => latest.current.snapshot(), actions: Object.fromEntries(Object.keys(controller.actions).map(type => [type, (action: CalendarFileAction, context: CalendarFileActionContext) => latest.current.actions[action.type]?.(action, context)])), targets: Object.fromEntries(Object.keys(controller.actions).map(type => [type, (action: CalendarFileAction) => latest.current.targets?.[action.type]?.(action) ?? []])) } })
     entry.revision = nextRevision(ownerApi); entry.signature = ''
     const captured = entry
     return () => {
@@ -134,7 +137,11 @@ export function registerCalendarFileCommands(pluginApi: ValleyPluginApi): () => 
   const inspectionSchema = object({ target: targetSchema, filePath: text(32768), revision: text(256), view: viewSchema, form: { anyOf: [formSchema, { type: 'null' }] } })
   const resultSchema = object({ status: { const: 'queued' }, target: targetSchema, action: text(256), originalRevision: text(256) })
   const revisionRequirements = [{ argument: 'expectedRevision', inspectionCommand: 'calendar:file-view-inspect', description: 'Revision of the exact mounted Calendar file view and its current raw form, including editor readiness.' }]
-  const fileTargets = (input: ReturnType<typeof parseInput>, write = false): CommandFileTarget[] => [{ kind: 'file', path: owner(input.target, ownerApi).target.filePath, fileOperation: write ? 'write' : 'read' }]
+  const fileTargets = async (input: ReturnType<typeof parseInput>, write = false): Promise<CommandFileTarget[]> => {
+    const entry = owner(input.target, ownerApi), action = input.action
+    const controller = action ? [...entry.controllers.values()].find(controller => controller.current.actions[action.type]) : undefined
+    return [{ kind: 'file', path: entry.target.filePath, fileOperation: write ? 'write' : 'read' }, ...(action ? await controller?.current.targets?.[action.type]?.(action) ?? [] : [])]
+  }
   const invoke = async (input: ReturnType<typeof parseInput>, context: CommandContext) => {
     const entry = owner(input.target, ownerApi), observation = inspect(entry, ownerApi)
     if (entry.pending || !input.action || observation.revision !== input.expectedRevision) throw refused('REVISION_CONFLICT', 'Calendar controls or draft changed. Inspect the exact file view again.')
@@ -145,17 +152,18 @@ export function registerCalendarFileCommands(pluginApi: ValleyPluginApi): () => 
       if (context.cancellation?.aborted) throw refused('CANCELLED', 'The Calendar action was cancelled before its effect.')
       if (runtimeState(ownerApi).owners.get(keyOf(input.target)) !== entry || !entry.controllers.has('view') || ![...entry.controllers.values()].includes(controller)) throw refused('TARGET_REPLACED', 'The Calendar action owner changed before its effect.')
     }
-    const validate = async (targets?: CommandFileTarget[]): Promise<void> => { assertCurrent(); const before = inspect(entry, ownerApi).revision; if (context.validateBeforeRun && !await context.validateBeforeRun(targets ?? fileTargets(input, saveTypes.includes(action.type)))) throw refused('PERMISSION_DENIED', 'The Calendar action was denied before its effect.'); assertCurrent(); if (inspect(entry, ownerApi).revision !== before) throw refused('REVISION_CONFLICT', 'Calendar state changed while authorization was pending.') }
+    const authorized = await fileTargets(input, saveTypes.includes(action.type))
+    const validate = async (targets?: CommandFileTarget[]): Promise<void> => { assertCurrent(); const before = inspect(entry, ownerApi).revision; if (context.validateBeforeRun && !await context.validateBeforeRun(targets ?? authorized)) throw refused('PERMISSION_DENIED', 'The Calendar action was denied before its effect.'); assertCurrent(); if (inspect(entry, ownerApi).revision !== before) throw refused('REVISION_CONFLICT', 'Calendar state changed while authorization was pending.') }
     await validate()
     if (inspect(entry, ownerApi).revision !== input.expectedRevision) throw refused('REVISION_CONFLICT', 'Calendar state changed while authorization was pending.')
     entry.pending = true; entry.revision = nextRevision(ownerApi)
     try {
-      await controller.current.actions[action.type]!(action, { validate })
-      if (runtimeState(ownerApi).owners.get(keyOf(input.target)) !== entry || !entry.controllers.has('view')) throw new Error('The Calendar file view changed after dispatch.')
+      await controller.current.actions[action.type]!(action, { validate, targets: authorized })
+      if (!openerTypes.includes(action.type) && (runtimeState(ownerApi).owners.get(keyOf(input.target)) !== entry || !entry.controllers.has('view'))) throw new Error('The Calendar file view changed after dispatch.')
       return { status: 'queued' as const, target: input.target, action: action.type, originalRevision: input.expectedRevision! }
     } catch (cause) {
       if ((cause as { outcome?: string })?.outcome === 'not-applied') throw cause
-      throw Object.assign(new Error('The Calendar action was dispatched without a confirmed effect. Inspect its original execution and current file/form; do not replay it.'), { code: 'EFFECT_UNVERIFIED', outcome: 'unknown', outcomeUnknown: true, retryable: false, cause })
+      throw Object.assign(new Error('The Calendar action was dispatched without a confirmed effect. Inspect its original execution and current file/form; do not replay it.'), { code: 'EFFECT_UNVERIFIED', outcome: 'unknown', outcomeUnknown: true, retryable: false, cause, details: { cause: { code: typeof (cause as { code?: unknown })?.code === 'string' ? (cause as { code: string }).code : null, message: cause instanceof Error ? cause.message : String(cause) } } })
     } finally { entry.pending = false; entry.revision = nextRevision(ownerApi); entry.signature = '' }
   }
   const disposers = [pluginApi.commands.register({ id: 'file-view-inspect', label: 'Calendar: inspect exact mounted file view and form', sideEffect: 'read', paletteSafe: false, input: { schema: inputSchema(), parse: raw => parseInput(raw) }, outputSchema: inspectionSchema, fileTargets, recovery: 'observational', idempotent: true, limits: { requestBytes: 131072, responseBytes: 131072 }, run: input => inspect(owner(input.target, ownerApi), ownerApi) })]

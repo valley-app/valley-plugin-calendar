@@ -2280,6 +2280,35 @@ describe('Calendar automation and item restoration', () => {
     expect(mock.busUndo).toHaveLength(1)
   })
 
+  it('closes the quick editor calendar:open opened on the main page and restores the selection it replaced', async () => {
+    const mock = setupCalendarApi({ events: [{ id: 'fern', title: 'Fern survey', date: '2026-06-08' }, { id: 'oak', title: 'Oak survey', date: '2026-06-09' }] })
+    registerCalendarCommands(mock.api)
+    const selection = () => mock.api.runtime.getOrCreate<{ selected: Map<string, { id: string }> }>('calendar.surfaces', () => { throw new Error('missing surfaces') }).selected.get('main_workspace')?.id
+    const run = async (id: string, target: string) => { let ok = false; await act(async () => { ok = (await mock.api.commands.execute(id, { id: target })).ok }); return ok }
+    const dialog = () => document.querySelector('[role="dialog"]')
+    patchTimeControl({ view: 'month', cursor: '2026-06-01', selectedDate: null })
+    const { container } = render(React.createElement(Calendar, { variant: 'main' }))
+    const chip = (id: string) => container.querySelector(`.calendar-chip[data-calendar-item-id="${id}"]`)
+    await waitFor(() => expect(chip('oak')).toBeTruthy())
+    fireEvent.click(chip('oak')!)
+    await waitFor(() => expect(chip('oak')).toHaveClass('selected'))
+    expect(await run('calendar:close-editor', 'fern')).toBe(false)
+    expect(await run('calendar:open', 'fern')).toBe(true)
+    await waitFor(() => expect(dialog()).toBeTruthy())
+    expect([chip('fern')?.classList.contains('selected'), selection()]).toEqual([true, 'fern'])
+    expect(await run('calendar:close-editor', 'oak')).toBe(false)
+    expect(dialog()).toBeTruthy()
+    expect(await run('calendar:close-editor', 'fern')).toBe(true)
+    await waitFor(() => expect(dialog()).toBeNull())
+    expect([chip('oak')?.classList.contains('selected'), chip('fern')?.classList.contains('selected'), selection()]).toEqual([true, false, 'oak'])
+    expect(await run('calendar:close-editor', 'fern')).toBe(false)
+    expect(await run('calendar:open', 'fern')).toBe(true)
+    await waitFor(() => expect(dialog()).toBeTruthy())
+    fireEvent.click(document.querySelector('.calendar-quickadd-cancel')!)
+    await waitFor(() => expect(dialog()).toBeNull())
+    expect(await run('calendar:close-editor', 'fern')).toBe(false)
+  })
+
   it('restores item identity and leaves the current view intact when a target is missing', async () => {
     const mock = setupCalendarApi({ events: [{ id: 'local', title: 'Field work', date: '2026-09-01' }] })
     const provider = mock.api.interop.extensions.providers(PLUGIN_SURFACE_V1).find((entry) => entry.extension.surface === 'main_workspace')!.extension

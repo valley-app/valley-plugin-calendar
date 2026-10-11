@@ -182,6 +182,10 @@ export function selectCalendarProperties(item: CalItem | null, surface: SlotId):
   notify()
 }
 
+export function calendarPropertiesSelection(surface: SlotId): CalItem | undefined {
+  return state().selected.get(surface)
+}
+
 export function useCalendarSurface(surface: SlotId, time: TimeControlState, navigation?: MainWorkspaceNavigationController): void {
   React.useEffect(() => {
     state().time = time

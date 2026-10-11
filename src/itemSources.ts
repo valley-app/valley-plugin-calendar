@@ -110,15 +110,15 @@ export interface CalendarSourceError { owner: string; message: string }
 interface SourceRead { items: SourcedItem[]; errors: CalendarSourceError[]; complete: boolean }
 const EMPTY_SOURCE_READ: SourceRead = { items: [], errors: [], complete: false }
 
-export function listSourcedItems(strict = false, startDate = '0001-01-01', endDate = '9999-12-31'): Promise<SourcedItem[]> {
-  return sourceReads().read(JSON.stringify([strict, startDate, endDate])).then(result => result.items)
+export function listSourcedItems(strict = false, startDate = '0001-01-01', endDate = '9999-12-31', sourceId?: string): Promise<SourcedItem[]> {
+  return sourceReads().read(JSON.stringify(sourceId ? [strict, startDate, endDate, sourceId] : [strict, startDate, endDate])).then(result => result.items)
 }
 
 function sourceReads() {
   return readOwner('sources', (owner) => {
     const cache = createRevisionCache((key: string, assertCurrent) => {
-      const [strict, startDate, endDate] = JSON.parse(key) as [boolean, string, string]
-      return readSourcedItems(owner, strict, startDate, endDate, assertCurrent)
+      const [strict, startDate, endDate, sourceId] = JSON.parse(key) as [boolean, string, string, string?]
+      return readSourcedItems(owner, strict, startDate, endDate, assertCurrent, sourceId)
     }, 32, result => result.complete)
     const signature = (): string => JSON.stringify([
       [...sources(owner), ...owner.interop.services.providers(CALENDAR_ITEM_SOURCE_V1)].map(({ providerId, owner, sessionId, version, methods, metadata }) => [providerId, owner, sessionId, version, methods, metadata]),
@@ -140,12 +140,12 @@ function sourceReads() {
   })
 }
 
-async function readSourcedItems(owner: ValleyPluginApi, strict: boolean, startDate: string, endDate: string, assertCurrent: () => void): Promise<SourceRead> {
+async function readSourcedItems(owner: ValleyPluginApi, strict: boolean, startDate: string, endDate: string, assertCurrent: () => void, sourceId?: string): Promise<SourceRead> {
   assertCurrent()
-  const providers = sources(owner)
+  const providers = sources(owner).filter(source => !sourceId || source.providerId === sourceId)
   const compatible = new Set(providers.map(source => source.owner))
   const errors: CalendarSourceError[] = owner.interop.services.providers(CALENDAR_ITEM_SOURCE_V1)
-    .filter(source => !compatible.has(source.owner))
+    .filter(source => !compatible.has(source.owner) && (!sourceId || source.providerId === sourceId))
     .map(source => ({ owner: source.owner, message: uiText('calendar.source.incompatible', { owner: source.owner }) }))
   let total = 0
   const results = await Promise.allSettled(providers.map(async source => {

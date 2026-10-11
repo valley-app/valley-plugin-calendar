@@ -157,6 +157,7 @@
   "calendar.command.get": "Kalender: Eintrag abrufen",
   "calendar.command.listItems": "Kalender: Alle Einträge auflisten",
   "calendar.command.open": "Kalender: Eintrag öffnen",
+  "calendar.command.closeEditor": "Kalender: Eintragseditor schließen",
   "calendar.command.sourceAction": "Kalender: Quellenaktion ausführen",
   "calendar.command.sourceActions": "Kalender: Quellenaktionen auflisten",
   "calendar.command.sourceCreate": "Kalender: Eintrag in Quelle erstellen",

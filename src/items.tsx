@@ -101,6 +101,8 @@ interface CalendarEditRequestStore {
   get(): CalendarEditRequest | null
   publish(value: CalendarEditRequest | null): void
   subscribe(listener: () => void): () => void
+  /** Set by the mounted main page: closes the quick editor it opened from an edit request for this item and restores the selection that request replaced. */
+  closeEditor: ((item: CalItem) => Promise<boolean>) | null
 }
 
 export function calendarEditRequestStore(): CalendarEditRequestStore {
@@ -108,6 +110,7 @@ export function calendarEditRequestStore(): CalendarEditRequestStore {
     const store: CalendarEditRequestStore = {
       value: null,
       listeners: new Set(),
+      closeEditor: null,
       get: () => store.value,
       publish: (value) => {
         store.value = value

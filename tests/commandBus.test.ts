@@ -67,6 +67,20 @@ describe('calendar commands (bus)', () => {
     if (r.ok) expect(r.value).toMatchObject({ selectedDate: '2026-06-20', cursor: '2026-06-01' })
   })
 
+  it('settles goto and today to a plain time-control value when the sandboxed host answers patchTimeControl asynchronously', async () => {
+    const mock = setup()
+    const host = mock.api.workspace.patchTimeControl.bind(mock.api.workspace)
+    vi.spyOn(mock.api.workspace, 'patchTimeControl').mockImplementation(patch => Promise.resolve(host(patch)) as never)
+    for (const [id, input] of [['calendar:goto', { date: '2026-06-20' }], ['calendar:today', undefined]] as const) {
+      const r = await mock.api.commands.execute(id, input)
+      expect(r.ok, id).toBe(true)
+      if (!r.ok) continue
+      expect(r.value, id).not.toBeInstanceOf(Promise)
+      expect(Object.getPrototypeOf(r.value), id).toBe(Object.prototype)
+      expect(r.value, id).toMatchObject({ selectedDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) })
+    }
+  })
+
   it('declares the persisted time-selection commands goto and today as non-undoable writes with a side-effect-free preview', async () => {
     const mock = setup()
     for (const id of ['calendar:goto', 'calendar:today']) expect(mock.api.commands.describe(id), id).toMatchObject({ sideEffect: 'write', previewSupported: true })

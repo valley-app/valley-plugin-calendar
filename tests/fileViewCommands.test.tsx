@@ -43,7 +43,16 @@ function setup(content = raw) {
     return result
   }
   const ready = async () => { await waitFor(async () => { const value = await inspect(); expect(value.view.editor.readiness).toBe('ready'); expect(value.view.items.length).toBeGreaterThan(0) }) }
-  return { mock, command, inspect, invoke, ready }
+  // Main refuses RESOURCE_TARGET_CHANGED unless every validateBeforeRun target set equals the command's declared fileTargets.
+  const invokeDeclared = async (action: CalendarFileAction, route = 'execute') => {
+    const definition = command(`file-view-${route}`), calls: unknown[] = []
+    const declared = await definition.fileTargets!(definition.input!.parse({ target, expectedRevision: (await inspect()).revision, action }))
+    await invoke(action, route, { validateBeforeRun: async targets => { calls.push(targets); return true } })
+    expect(calls.length, action.type).toBeGreaterThan(0)
+    for (const validated of calls) expect(validated, action.type).toEqual(declared)
+    return declared
+  }
+  return { mock, command, inspect, invoke, invokeDeclared, ready }
 }
 
 describe('exact Calendar file action owners', () => {
@@ -84,8 +93,8 @@ describe('exact Calendar file action owners', () => {
     await fixture.invoke({ type: 'form-patch', patch: { allDay: true } }); expect((await fixture.inspect()).form).toMatchObject({ allDay: true, start: '', end: '' })
     await fixture.invoke({ type: 'url-add', value: 'https://example.com/survey' }); await fixture.invoke({ type: 'attachment-add', value: 'assets/map.pdf' })
     const open = vi.spyOn(fixture.mock.api.workspace, 'openFile')
-    await fixture.invoke({ type: 'url-open', value: 'https://example.com/survey' }, 'execute'); expect(fixture.mock.externalUrls).toEqual(['https://example.com/survey'])
-    await fixture.invoke({ type: 'attachment-open', value: 'assets/map.pdf' }, 'execute'); expect(open).toHaveBeenCalledWith('assets/map.pdf')
+    expect(await fixture.invokeDeclared({ type: 'url-open', value: 'https://example.com/survey' })).toEqual([{ kind: 'file', path, fileOperation: 'read' }]); expect(fixture.mock.externalUrls).toEqual(['https://example.com/survey'])
+    expect(await fixture.invokeDeclared({ type: 'attachment-open', value: 'assets/map.pdf' })).toEqual(expect.arrayContaining([{ kind: 'file', path, fileOperation: 'read' }, { kind: 'file', path: 'assets/map.pdf', fileOperation: 'read' }])); expect(open).toHaveBeenCalledWith('assets/map.pdf')
     await fixture.invoke({ type: 'url-remove', value: 'https://example.com/survey' }); await fixture.invoke({ type: 'attachment-remove', value: 'assets/map.pdf' }); expect((await fixture.inspect()).form).toMatchObject({ urls: [], attachments: [] })
     await fixture.invoke({ type: 'cancel' }, 'execute'); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull()); expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
     await fixture.invoke({ type: 'open-editor', date: '2026-09-30' }, 'execute'); await screen.findByRole('dialog')
@@ -113,12 +122,36 @@ describe('exact Calendar file action owners', () => {
 
   it('creates and opens the daily note only after authorizing its actual destination', async () => {
     const fixture = setup(); render(<Calendar filePath={path} mountedView={mountedView} />); await fixture.ready()
-    const validateBeforeRun = vi.fn(async () => true), open = vi.spyOn(fixture.mock.api.workspace, 'openFile')
-    await fixture.invoke({ type: 'open-daily-note', date: '2026-09-28' }, 'execute', { validateBeforeRun })
+    const open = vi.spyOn(fixture.mock.api.workspace, 'openFile')
     const note = 'plugins/calendar/dailynotes/2026-09-28.md'
+    expect(await fixture.invokeDeclared({ type: 'open-daily-note', date: '2026-09-28' })).toEqual(expect.arrayContaining([{ kind: 'file', path: note, fileOperation: 'write' }]))
     expect(await fixture.mock.api.vault.readFile(note)).toBe('# 2026-09-28\n\n'); expect(open).toHaveBeenCalledWith(note)
-    expect(validateBeforeRun).toHaveBeenCalledWith([{ kind: 'file', path: note, fileOperation: 'write' }])
     expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
+  })
+
+  it('declares an existing daily note as a read target and never creates it under that read authorization', async () => {
+    const fixture = setup(); render(<Calendar filePath={path} mountedView={mountedView} />); await fixture.ready()
+    const open = vi.spyOn(fixture.mock.api.workspace, 'openFile'), create = vi.spyOn(fixture.mock.api.vault, 'createTextDocumentGuarded'), note = 'plugins/calendar/dailynotes/2026-09-28.md'
+    expect((await fixture.mock.api.vault.createTextDocumentGuarded(note, '# Existing\n')).ok).toBe(true); create.mockClear()
+    const declared = await fixture.invokeDeclared({ type: 'open-daily-note', date: '2026-09-28' })
+    expect(declared).toEqual(expect.arrayContaining([{ kind: 'file', path: note, fileOperation: 'read' }])); expect(declared.some(target => target.fileOperation === 'write')).toBe(false)
+    expect(await fixture.mock.api.vault.readFile(note)).toBe('# Existing\n'); expect(open).toHaveBeenCalledWith(note); expect(create).not.toHaveBeenCalled()
+    open.mockClear(); let vanished = false
+    const stat = fixture.mock.api.vault.stat.bind(fixture.mock.api.vault)
+    vi.spyOn(fixture.mock.api.vault, 'stat').mockImplementation(async relPath => vanished && relPath === note ? null : await stat(relPath))
+    await expect(fixture.invoke({ type: 'open-daily-note', date: '2026-09-28' }, 'execute', { validateBeforeRun: async () => { vanished = true; return true } })).rejects.toMatchObject({ outcome: 'not-applied' })
+    expect(create).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled()
+  })
+
+  it('reports an accepted URL open as queued when the opened surface unmounts this view, and keeps an opener failure cause', async () => {
+    const fixture = setup(); const rendered = render(<Calendar filePath={path} mountedView={mountedView} />); await fixture.ready()
+    await fixture.invoke({ type: 'open-editor', date: '2026-09-28' }, 'execute'); await screen.findByRole('dialog')
+    await fixture.invoke({ type: 'url-add', value: 'https://example.com/survey' })
+    const opener = vi.spyOn(fixture.mock.api.files, 'openExternalUrl').mockRejectedValueOnce(Object.assign(new Error('Link broker refused'), { code: 'LINK_REFUSED' }))
+    await expect(fixture.invoke({ type: 'url-open', value: 'https://example.com/survey' }, 'execute')).rejects.toMatchObject({ code: 'EFFECT_UNVERIFIED', outcome: 'unknown', details: { cause: { code: 'LINK_REFUSED', message: 'Link broker refused' } } })
+    opener.mockImplementationOnce(async () => { rendered.unmount(); return true })
+    expect(await fixture.invoke({ type: 'url-open', value: 'https://example.com/survey' }, 'execute')).toMatchObject({ status: 'queued', action: 'url-open' })
+    expect(opener).toHaveBeenLastCalledWith('https://example.com/survey'); expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
   })
 
   it('refuses denied/stale/replaced effects and retains post-dispatch uncertainty without replay', async () => {

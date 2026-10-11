@@ -18,11 +18,19 @@ export function dailyNoteDate(path: string, folder: string): string | null {
   return match && isRealCalendarDate(Number(match[1]), Number(match[2]), Number(match[3])) ? name.slice(0, 10) : null
 }
 
-export async function openDailyNote(date: string, validateBeforeEffect?: (path: string) => Promise<void>): Promise<void> {
+/** The vault path of the daily note for `date`, or null when the date cannot name one. */
+export function dailyNotePath(date: string): string | null {
   const folder = calendarFolder('dailyNotesFolder')
   const path = `${folder}/${date}.md`
-  if (!dailyNoteDate(path, folder)) throw new Error(uiText('calendar.daily.invalid'))
+  return dailyNoteDate(path, folder) ? path : null
+}
+
+/** `mayCreate` false (the caller was authorized only to read the note) refuses a missing note as not-applied instead of creating it. */
+export async function openDailyNote(date: string, validateBeforeEffect?: (path: string) => Promise<void>, mayCreate = true): Promise<void> {
+  const path = dailyNotePath(date)
+  if (!path) throw new Error(uiText('calendar.daily.invalid'))
   if (!await api.vault.stat(path)) {
+    if (!mayCreate) throw Object.assign(new Error('The daily note no longer exists and this open was authorized only to read it.'), { code: 'REVISION_CONFLICT', outcome: 'not-applied' })
     await validateBeforeEffect?.(path)
     const result = await api.vault.createTextDocumentGuarded(path, `# ${date}\n\n`)
     if (!result.ok && !await api.vault.stat(path)) throw new Error(uiText('calendar.error.save'))

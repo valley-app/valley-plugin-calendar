@@ -118,6 +118,8 @@ interface QuickAddProps {
   onAdded: () => void
   fileEditor?: CalendarFileEditor
   mountedView?: MountedPluginView
+  /** Filled with this editor's cancel while it is open, for calendar:close-editor. */
+  closeRef?: { current: (() => Promise<boolean>) | null }
 }
 
 export function QuickAdd(props: QuickAddProps): ReactElement | null {
@@ -150,7 +152,7 @@ export function QuickAdd(props: QuickAddProps): ReactElement | null {
   return null
 }
 
-function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView, draftInstance, dismissControl, onDismiss }: QuickAddProps & { draftInstance: string; dismissControl: { canDismiss(): Promise<boolean> }; onDismiss: () => void }): ReactElement {
+function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView, closeRef, draftInstance, dismissControl, onDismiss }: QuickAddProps & { draftInstance: string; dismissControl: { canDismiss(): Promise<boolean> }; onDismiss: () => void }): ReactElement {
   React.useEffect(() => onDismiss, [onDismiss])
   const editing = state.editItem
   const closing = React.useRef(false)
@@ -277,6 +279,8 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
     }
   }
   dismissControl.canDismiss = cancel
+  if (closeRef) closeRef.current = () => cancel(undefined, true)
+  React.useEffect(() => () => { if (closeRef) closeRef.current = null }, [closeRef])
 
   const submit = async (validateBeforeEffect?: () => Promise<void>, command = false): Promise<void> => {
     const trimmed = title.trim()
@@ -398,10 +402,14 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
       'url-remove': action => { if (action.type === 'url-remove') { refuseForm(); if (!urls.includes(action.value)) throw Object.assign(new Error('This exact Calendar URL is missing.'), { outcome: 'not-applied' }); setUrls(urls.filter(value => value !== action.value)) } },
       'attachment-add': action => { if (action.type === 'attachment-add') { refuseForm(); if (!action.value || action.value.startsWith('/') || action.value.split('/').some(part => part === '..')) throw Object.assign(new Error('Expected a vault-relative attachment path.'), { outcome: 'not-applied' }); if (!attachments.includes(action.value)) setAttachments([...attachments, action.value]) } },
       'attachment-remove': action => { if (action.type === 'attachment-remove') { refuseForm(); if (!attachments.includes(action.value)) throw Object.assign(new Error('This exact Calendar attachment is missing.'), { outcome: 'not-applied' }); setAttachments(attachments.filter(value => value !== action.value)) } },
-      'url-open': async (action, context) => { if (action.type === 'url-open') { refuseForm(); if (!urls.includes(action.value)) throw Object.assign(new Error('This exact Calendar URL is missing.'), { outcome: 'not-applied' }); const path = parseAppOpenUrl(action.value); await context.validate(path ? [{ kind: 'file', path, fileOperation: 'read' }] : []); if (path) await api.workspace.openFile(path); else await api.files.openExternalUrl(action.value) } },
-      'attachment-open': async (action, context) => { if (action.type === 'attachment-open') { refuseForm(); if (!attachments.includes(action.value)) throw Object.assign(new Error('This exact Calendar attachment is missing.'), { outcome: 'not-applied' }); await context.validate([{ kind: 'file', path: action.value, fileOperation: 'read' }]); await api.workspace.openFile(action.value) } },
+      'url-open': async (action, context) => { if (action.type === 'url-open') { refuseForm(); if (!urls.includes(action.value)) throw Object.assign(new Error('This exact Calendar URL is missing.'), { outcome: 'not-applied' }); const path = parseAppOpenUrl(action.value); await context.validate(); if (path) await api.workspace.openFile(path); else await api.files.openExternalUrl(action.value) } },
+      'attachment-open': async (action, context) => { if (action.type === 'attachment-open') { refuseForm(); if (!attachments.includes(action.value)) throw Object.assign(new Error('This exact Calendar attachment is missing.'), { outcome: 'not-applied' }); await context.validate(); await api.workspace.openFile(action.value) } },
       cancel: async (_action, context) => { refuseForm(); if (!await cancel(() => context.validate(), true)) throw Object.assign(new Error('The Calendar draft could not be cancelled.'), { outcome: 'not-applied' }) },
       save: async (_action, context) => { refuseForm(); if (!title.trim()) throw Object.assign(new Error('The Calendar draft title is empty.'), { outcome: 'not-applied' }); await submit(() => context.validate(), true) }
+    },
+    targets: {
+      'url-open': action => { const path = action.type === 'url-open' ? parseAppOpenUrl(action.value) : null; return path ? [{ kind: 'file', path, fileOperation: 'read' }] : [] },
+      'attachment-open': action => action.type === 'attachment-open' ? [{ kind: 'file', path: action.value, fileOperation: 'read' }] : []
     }
   })
 

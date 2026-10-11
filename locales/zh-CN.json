@@ -157,6 +157,7 @@
   "calendar.command.get": "日历：获取项目",
   "calendar.command.listItems": "日历：列出所有项目",
   "calendar.command.open": "日历：打开项目",
+  "calendar.command.closeEditor": "日历：关闭项目编辑器",
   "calendar.command.sourceAction": "日历：执行来源项目操作",
   "calendar.command.sourceActions": "日历：列出来源项目的操作",
   "calendar.command.sourceCreate": "日历：创建来源项目",

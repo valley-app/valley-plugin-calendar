@@ -12,7 +12,7 @@ import type { PluginCommand, ValleyPluginApi, CalendarItemPatch } from '@valley/
 import type { CommandSideEffect } from '@valley/plugin-sdk/commands'
 import { loadEvents, newEvent, normalizeEventRecord, rawAppend, rawDelete, rawUpdate } from './events'
 import { listSourcedItems, sourceDescriptors, sourcedItemActions, updateSourcedItem, removeSourcedItem, createSourcedItem, runSourcedItemAction } from './itemSources'
-import { eventToItem, sourcedToItem, requestCalendarItemEdit, type CalItem } from './items'
+import { calendarEditRequestStore, eventToItem, sourcedToItem, requestCalendarItemEdit, type CalItem } from './items'
 import { addDays, daysBetween } from './dateMath'
 
 const resultText = { type: 'string', maxLength: 65536 }
@@ -40,7 +40,7 @@ const actionResult = (depth: number): Record<string, unknown> => resultObject({ 
 const integrationResult = resultObject({ name: resultText, description: resultText, version: resultText, author: resultText, localized: resultObject(Object.fromEntries(['en', 'de', 'es', 'fr', 'zh-CN'].map(key => [key, resultObject({ name: resultText, description: resultText }, ['name'])])), []) }, ['name', 'version'])
 const timeResult = resultObject({ view: { enum: ['month', 'week', 'year'] }, cursor: resultText, selectedDate: resultNullable(resultText), rangeStart: resultNullable(resultText), rangeEnd: resultNullable(resultText), selectedTime: resultNullable(resultText), timeRange: resultNullable(resultObject({ start: resultText, end: resultText })) })
 export const calendarResults: Record<string, Record<string, unknown>> = {
-  'list-items': resultList(itemResult, 10000), 'source-actions': resultList(actionResult(3), 100), get: itemResult, open: itemResult, 'edit-fields': itemResult, delete: itemResult,
+  'list-items': resultList(itemResult, 10000), 'source-actions': resultList(actionResult(3), 100), get: itemResult, open: itemResult, 'close-editor': itemResult, 'edit-fields': itemResult, delete: itemResult,
   sources: resultList(resultObject({ sourceId: resultText, sourceKey: resultText, owner: resultText, version: resultText, methods: resultList(resultText, 100), integration: integrationResult }, ['sourceId', 'sourceKey', 'owner', 'version', 'methods']), 1000),
   'source-create': { const: true }, 'source-action': { const: true }, 'open-page': { type: 'null' }, add: eventResult, goto: timeResult, 'set-view': timeResult, today: timeResult, list: resultList(eventResult, 10000)
 }
@@ -98,7 +98,7 @@ export function parseCalendarValues(raw: unknown): CalendarItemPatch & { endDate
 export async function resolveCalendarTarget(target: CalendarTarget): Promise<CalItem> {
   if (target.sourceId) {
     if (!sourceDescriptors().some((source) => source.sourceId === target.sourceId)) throw new Error('The calendar item provider is unavailable.')
-    const sourced = (await listSourcedItems(true)).find((entry) => entry.sourceId === target.sourceId && entry.item.id === target.id)
+    const sourced = (await listSourcedItems(true, undefined, undefined, target.sourceId)).find((entry) => entry.sourceId === target.sourceId && entry.item.id === target.id)
     if (sourced) return sourcedToItem(sourced)
   } else {
     const local = (await loadEvents()).find((entry) => entry.id === target.id)
@@ -155,6 +155,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
     register({ id: 'source-actions', label: 'Calendar: List source item actions', labelKey: 'calendar.command.sourceActions', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id', 'sourceId'], additionalProperties: false }, parse: (raw) => { const target = parseCalendarTarget(raw); if (!target.sourceId) throw new Error('Expected a source id.'); return { id: target.id, sourceId: target.sourceId } } }, run: async ({ id, sourceId }) => { await resolveCalendarTarget({ id, sourceId }); return sourcedItemActions(sourceId, id) } }),
     register({ id: 'get', label: 'Calendar: Get item', labelKey: 'calendar.command.get', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id'], additionalProperties: false }, parse: parseCalendarTarget }, run: resolveCalendarTarget }),
     register({ id: 'open', label: 'Calendar: Open item', labelKey: 'calendar.command.open', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id'], additionalProperties: false }, parse: parseCalendarTarget }, run: async (target) => { const item = await resolveCalendarTarget(target); requestCalendarItemEdit(item); return item } }),
+    register({ id: 'close-editor', label: 'Calendar: Close item editor', labelKey: 'calendar.command.closeEditor', paletteSafe: false, sideEffect: 'read', input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id'], additionalProperties: false }, parse: parseCalendarTarget }, run: async (target) => { const item = await resolveCalendarTarget(target); if (!await calendarEditRequestStore().closeEditor?.(item)) throw Object.assign(new Error('No Calendar editor that calendar:open opened for this item is open.'), { code: 'ACTION_UNAVAILABLE', outcome: 'not-applied', retryable: false }); return item } }),
     register({
       id: 'edit-fields',
       label: 'Calendar: Edit item fields',
@@ -280,7 +281,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
         },
         fromCli: (args) => ({ date: args[0] })
       },
-      run: ({ date }) => ({ value: api.workspace.patchTimeControl(selectionPatch(date)), revert: null }),
+      run: async ({ date }) => ({ value: await api.workspace.patchTimeControl(selectionPatch(date)), revert: null }),
       revision: () => timeControlRevision(),
       preview: ({ date }) => selectionPatch(date),
       formatCli: (tc) => `Calendar at ${tc.selectedDate ?? tc.cursor} (${tc.view})`
@@ -313,7 +314,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       id: 'today',
       label: 'Calendar: Go to today', labelKey: 'auto.ee8581831b9c',
       sideEffect: 'write',
-      run: () => ({ value: api.workspace.patchTimeControl(selectionPatch(todayIso())), revert: null }),
+      run: async () => ({ value: await api.workspace.patchTimeControl(selectionPatch(todayIso())), revert: null }),
       revision: () => timeControlRevision(),
       preview: () => selectionPatch(todayIso()),
       formatCli: (tc) => `Calendar at ${tc.selectedDate ?? tc.cursor} (${tc.view})`

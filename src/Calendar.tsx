@@ -1,5 +1,5 @@
 import { deleteCalendarFileEntry } from './calendarFiles'
-import { openDailyNote } from './dailyNotes'
+import { dailyNotePath, openDailyNote } from './dailyNotes'
 import { React, api } from './runtime'
 import type { ReactElement } from 'react'
 import type { MainWorkspaceNavigation, MountedPluginView } from '@valley/plugin-sdk'
@@ -41,7 +41,7 @@ import { SWIPE_IDLE_MS, calendarSwipeStep, newSwipeGesture, type CalendarSwipeGe
 import { CalendarDays, ChevronRight, Clock, Plus, Trash, X } from './icons'
 import { uiText } from './localization'
 import { revealTargetStore } from './runtime'
-import { selectCalendarProperties, useCalendarSurface } from './surfaces'
+import { calendarPropertiesSelection, selectCalendarProperties, useCalendarSurface } from './surfaces'
 import { useCalendarFileActions } from './fileViewCommands'
 
 // Re-exports kept stable for the Panel/Page/Agenda views and tests.
@@ -255,12 +255,28 @@ export function Calendar({
     React.useCallback(() => editRequests.get(), [editRequests]),
     React.useCallback(() => editRequests.get(), [editRequests])
   )
+  // What calendar:open replaced, so calendar:close-editor can put it back; dropped when the editor closes any other way.
+  const requested = React.useRef<{ key: string; selected: string | null; properties: CalItem | undefined } | null>(null)
+  const closeQuickAdd = React.useRef<(() => Promise<boolean>) | null>(null)
   React.useEffect(() => {
     if (variant !== 'main' || !editRequest) return
+    requested.current = quickAdd ? null : { key: calendarItemKey(editRequest.item), selected: selectedItemKey, properties: calendarPropertiesSelection(surface) }
     if (editRequest.item.readOnly) setQuickAdd({ date: editRequest.item.date, editItem: editRequest.item })
     else editItem(editRequest.item)
     editRequests.publish(null)
-  }, [editItem, editRequest, editRequests, variant])
+  }, [editItem, editRequest, editRequests, variant, quickAdd, selectedItemKey, surface])
+  React.useEffect(() => {
+    if (variant !== 'main') return
+    const close = async (item: CalItem): Promise<boolean> => {
+      const opened = requested.current
+      if (!opened || opened.key !== calendarItemKey(item) || !quickAdd?.editItem || calendarItemKey(quickAdd.editItem) !== opened.key || !closeQuickAdd.current || !await closeQuickAdd.current()) return false
+      setSelectedItemKey(opened.selected)
+      selectCalendarProperties(opened.properties ?? null, surface)
+      return true
+    }
+    editRequests.closeEditor = close
+    return () => { if (editRequests.closeEditor === close) editRequests.closeEditor = null }
+  }, [editRequests, quickAdd, surface, variant])
 
   React.useEffect(() => () => {
     if (itemClickTimerRef.current) clearTimeout(itemClickTimerRef.current)
@@ -537,11 +553,14 @@ export function Calendar({
       range: action => { if (action.type === 'range') patch({ rangeStart: action.start, rangeEnd: action.end }) },
       'history-back': () => { if (historyState.index <= 0) throw Object.assign(new Error('No Calendar history is available before this view.'), { outcome: 'not-applied' }); goHistory(-1) },
       'history-forward': () => { if (historyState.index >= historyState.entries.length - 1) throw Object.assign(new Error('No Calendar history is available after this view.'), { outcome: 'not-applied' }); goHistory(1) },
-      'open-daily-note': async (action, context) => { if (action.type === 'open-daily-note') await openDailyNote(action.date, path => context.validate([{ kind: 'file', path, fileOperation: 'write' }])) },
+      'open-daily-note': async (action, context) => { if (action.type === 'open-daily-note') await openDailyNote(action.date, () => context.validate(), context.targets.some(target => target.path === dailyNotePath(action.date) && target.fileOperation === 'write')) },
       'open-editor': action => { if (action.type === 'open-editor') { if (quickAdd || !fileEditor || fileEditor.locked || fileEditor.getSnapshot().readiness !== 'ready') throw Object.assign(new Error('The Calendar file editor is unavailable or already open.'), { outcome: 'not-applied' }); openQuickAdd(parseLocalDate(action.date), action.start, action.end, 'event') } },
       'select-item': action => { if (action.type === 'select-item') { const item = items.find(item => calendarItemKey(item) === action.key); if (!item) throw Object.assign(new Error('The Calendar item is no longer available in this file view.'), { outcome: 'not-applied' }); setSelectedItemKey(action.key); selectCalendarProperties(item, surface) } },
       'edit-item': action => { if (action.type === 'edit-item') { const item = items.find(item => calendarItemKey(item) === action.key); if (!item?.file || item.file.path !== filePath || item.readOnly || quickAdd || fileEditor?.locked) throw Object.assign(new Error('This exact Calendar file item cannot be edited now.'), { outcome: 'not-applied' }); editItem(item) } },
       'delete-item': async (action, context) => { if (action.type === 'delete-item') { const item = items.find(item => calendarItemKey(item) === action.key); if (!item?.file || item.file.path !== filePath || item.readOnly || quickAdd || fileEditor?.locked) throw Object.assign(new Error('This exact Calendar file item cannot be deleted now.'), { outcome: 'not-applied' }); await deleteCalendarFileEntry(item.file, () => context.validate()) } }
+    },
+    targets: {
+      'open-daily-note': async action => { const path = action.type === 'open-daily-note' ? dailyNotePath(action.date) : null; return path ? [{ kind: 'file', path, fileOperation: await api.vault.stat(path) ? 'read' : 'write' }] : [] }
     }
   })
 
@@ -682,8 +701,8 @@ export function Calendar({
           groups={calendarGroups}
           fileEditor={fileEditor}
           mountedView={mountedView}
-
-          onClose={() => setQuickAdd(null)}
+          closeRef={variant === 'main' ? closeQuickAdd : undefined}
+          onClose={() => { requested.current = null; setQuickAdd(null) }}
           onAdded={() => { /* data hook reloads on change */ }}
         />
       )}
