@@ -1,4 +1,6 @@
-import type { ValleyPluginApi } from '@valley/plugin-sdk'
+import { createBoundedCache, type ValleyPluginApi } from '@valley/plugin-sdk'
+
+const REVISION_CACHE_MAX_BYTES = 16 * 1024 * 1024
 
 export function createReloadQueue<T>(read: () => Promise<T>, publish: (value: T) => void, onError?: (error: unknown) => void): {
   reload: () => Promise<void>
@@ -27,46 +29,42 @@ export function createReloadQueue<T>(read: () => Promise<T>, publish: (value: T)
   }
 }
 
+export interface RevisionCacheMemory<V> {
+  owner: ValleyPluginApi
+  label: string
+  sizeOf: (value: V) => number
+}
+
 export function createRevisionCache<K, V>(
   read: (key: K, assertCurrent: () => void) => Promise<V>,
   capacity = 32,
-  reusable: (value: V) => boolean = () => true
+  reusable: (value: V) => boolean = () => true,
+  memory?: RevisionCacheMemory<V>
 ): {
   read: (key: K) => Promise<V>
   invalidate: () => void
   subscribe: (listener: () => void) => () => void
   dispose: () => void
 } {
-  const entries = new Map<K, { revision: number; value?: V; pending?: Promise<V> }>()
+  const values = createBoundedCache<K, { revision: number; value: V }>({
+    maxBytes: REVISION_CACHE_MAX_BYTES,
+    maxEntries: capacity,
+    sizeOf: (entry) => memory ? memory.sizeOf(entry.value) : 0
+  })
+  const pending = new Map<K, Promise<V>>()
   const listeners = new Set<() => void>()
+  const unregister = memory?.owner.cache.memory.register(values, memory.label)
   let revision = 0
   let disposed = false
-  const prune = (): void => {
-    for (const [key, entry] of entries) {
-      if (entries.size <= capacity) break
-      if (!entry.pending) entries.delete(key)
-    }
-  }
   return {
     read: (key) => {
       if (disposed) return Promise.reject(new Error('Calendar read owner is disposed.'))
-      let entry = entries.get(key)
-      if (entry) {
-        entries.delete(key)
-        entries.set(key, entry)
-        if (entry.pending) return entry.pending
-        if (entry.revision === revision) return Promise.resolve(entry.value as V)
-      } else {
-        if (entries.size >= capacity) {
-          const settled = [...entries].find(([, value]) => !value.pending)
-          if (!settled) return Promise.reject(new Error('Calendar has too many pending read ranges.'))
-          entries.delete(settled[0])
-        }
-        entry = { revision: -1 }
-        entries.set(key, entry)
-      }
-      const current = entry
-      current.pending = (async () => {
+      const inflight = pending.get(key)
+      if (inflight) return inflight
+      const cached = values.get(key)
+      if (cached?.revision === revision) return Promise.resolve(cached.value)
+      if (pending.size >= capacity) return Promise.reject(new Error('Calendar has too many pending read ranges.'))
+      const current: Promise<V> = (async () => {
         while (!disposed) {
           const accepted = revision
           let value: V
@@ -79,27 +77,25 @@ export function createRevisionCache<K, V>(
           }
           if (disposed) break
           if (accepted !== revision) continue
-          if (reusable(value)) {
-            current.value = value
-            current.revision = accepted
-          }
+          if (reusable(value)) values.set(key, { revision: accepted, value })
           return value
         }
         throw new Error('Calendar read owner is disposed.')
-      })().finally(() => { current.pending = undefined; prune() })
-      prune()
-      return current.pending
+      })().finally(() => { if (pending.get(key) === current) pending.delete(key) })
+      pending.set(key, current)
+      return current
     },
     invalidate: () => {
       if (disposed) return
       revision++
+      values.clear()
       for (const listener of [...listeners]) listener()
     },
     subscribe: (listener) => {
       if (!disposed) listeners.add(listener)
       return () => { listeners.delete(listener) }
     },
-    dispose: () => { disposed = true; entries.clear(); listeners.clear() }
+    dispose: () => { disposed = true; unregister?.(); values.clear(); pending.clear(); listeners.clear() }
   }
 }
 

@@ -119,7 +119,7 @@ function sourceReads() {
     const cache = createRevisionCache((key: string, assertCurrent) => {
       const [strict, startDate, endDate, sourceId] = JSON.parse(key) as [boolean, string, string, string?]
       return readSourcedItems(owner, strict, startDate, endDate, assertCurrent, sourceId)
-    }, 32, result => result.complete)
+    }, 32, result => result.complete, { owner, label: 'Calendar item source ranges', sizeOf: (result) => 256 + (result.items.length + result.errors.length) * 1024 })
     const signature = (): string => JSON.stringify([
       [...sources(owner), ...owner.interop.services.providers(CALENDAR_ITEM_SOURCE_V1)].map(({ providerId, owner, sessionId, version, methods, metadata }) => [providerId, owner, sessionId, version, methods, metadata]),
       owner.interop.state.providers(CALENDAR_ITEM_SOURCE_REVISION_V1).map(({ providerId, owner, sessionId, version, value }) => [providerId, owner, sessionId, version, value])

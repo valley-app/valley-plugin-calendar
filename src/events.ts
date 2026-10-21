@@ -27,7 +27,7 @@ function eventReads() {
     const cache = createRevisionCache((key: string, assertCurrent) => {
       const [start, end] = JSON.parse(key) as [string | null, string | null]
       return readEvents(owner, assertCurrent, start ?? undefined, end ?? undefined)
-    })
+    }, 32, undefined, { owner, label: 'Calendar event ranges', sizeOf: (events) => 256 + events.length * 1024 })
     const off = subscribeDatasetRevisions(owner, [EVENTS_DATASET, TAGS_DATASET, LINKS_DATASET, ATTACHMENTS_DATASET], cache.invalidate)
     return { ...cache, dispose: () => { off(); cache.dispose() } }
   })

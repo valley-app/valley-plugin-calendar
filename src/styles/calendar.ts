@@ -99,17 +99,29 @@ export const calendarStyles = `
   .calendar-view-main .calendar-topbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--app-bar-height) minmax(0, 1fr);
     gap: 0;
-    height: auto;
+    height: calc(2 * var(--app-bar-height));
   }
   .calendar-view-main .calendar-topbar-leading {
-    min-height: var(--app-bar-height);
     margin-right: var(--plugin-actions-offset, 0px);
   }
   .calendar-view-main .calendar-topbar-actions {
     justify-content: space-between;
-    flex-wrap: wrap;
-    margin: 0 0 var(--space-2, 8px);
+    margin: 0;
+  }
+  .calendar-view-main.calendar-view-compact .calendar-topbar-actions,
+  .calendar-view-main.calendar-view-compact .calendar-topbar .calendar-actions {
+    gap: 2px;
+  }
+  .calendar-view-main.calendar-view-compact .calendar-topbar .calendar-switcher-btn {
+    padding: 0 5px;
+    font-size: 0.64rem;
+  }
+  .calendar-view-main.calendar-view-compact .calendar-topbar .calendar-actions button {
+    min-width: 20px;
+    padding: 0 3px;
+    font-size: 0.62rem;
   }
 }
 
@@ -562,6 +574,7 @@ export const calendarStyles = `
   gap: 4px;
 }
 .calendar-view-compact .calendar-day-cell {
+  min-height: 0;
   align-items: center;
   aspect-ratio: 1;
   justify-content: center;

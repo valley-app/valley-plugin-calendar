@@ -399,33 +399,6 @@
         }
       },
       "titleKey": "auto.b2db10062979"
-    },
-    {
-      "id": "sync_state",
-      "store": "cache",
-      "version": 1,
-      "title": "Calendar sync state",
-      "primaryKey": [
-        "calendarId"
-      ],
-      "columns": {
-        "calendarId": {
-          "type": "text"
-        },
-        "cursor": {
-          "type": "text",
-          "nullable": true
-        },
-        "lastSyncAt": {
-          "type": "datetime",
-          "nullable": true
-        },
-        "state": {
-          "type": "json",
-          "nullable": true
-        }
-      },
-      "titleKey": "auto.9eb56535c39a"
     }
   ],
   "pathRefs": [

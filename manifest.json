@@ -2,7 +2,7 @@
   "apiVersion": 5,
   "id": "calendar",
   "name": "Calendar",
-  "version": "3.3.1",
+  "version": "3.3.2",
   "description": "Event and todo planner: left-sidebar agenda, right-sidebar compact calendar, and a full workspace page with month/week/year grids beside a live agenda column.",
   "author": [
     "valley"

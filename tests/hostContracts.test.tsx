@@ -113,3 +113,17 @@ it('keeps package styles tokenized, scalable, and consistent with SDK drop marke
     }
   }
 })
+
+it('keeps the narrow main month grid and toolbar within the pane', async () => {
+  const { calendarStyles } = await import('../src/styles/calendar')
+  const rule = (selector: string, from = calendarStyles): string => {
+    const start = from.indexOf(`${selector} {`)
+    expect(start, selector).toBeGreaterThanOrEqual(0)
+    return from.slice(start, from.indexOf('}', start))
+  }
+  expect(rule('.calendar-view-main .calendar-day-cell')).toMatch(/min-height:\s*78px/)
+  expect(rule('.calendar-view-compact .calendar-day-cell')).toMatch(/min-height:\s*0;/)
+  const narrow = calendarStyles.slice(calendarStyles.indexOf('@container calendar-main (max-width: 520px)'))
+  expect(rule('.calendar-view-main .calendar-topbar', narrow)).toMatch(/height:\s*calc\(2 \* var\(--app-bar-height\)\)/)
+  expect(rule('.calendar-view-main .calendar-topbar-actions', narrow)).not.toMatch(/flex-wrap:\s*wrap/)
+})

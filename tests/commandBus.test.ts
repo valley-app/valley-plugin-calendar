@@ -1,10 +1,10 @@
 import Ajv2020 from 'ajv/dist/2020'
 import { describe, expect, it, vi } from 'vitest'
-import type { DataRecord, ValleyPluginManifest } from '@valley/plugin-sdk/types'
+import type { DataRecord, LeafPane, ValleyPluginManifest } from '@valley/plugin-sdk/types'
 import { CALENDAR_ITEM_SOURCE_V2, type CalendarItemPatch, type CalendarSourceItem } from '@valley/plugin-sdk'
 import { createMockValleyApi, type MockValleyApi } from './harness'
 import { initRuntime as initCalendarRuntime } from '../src/runtime'
-import { registerCalendarCommands } from '../src/commands'
+import { openCalendarPage, registerCalendarCommands } from '../src/commands'
 import config from '../config.json'
 
 function validatePublishedResults(mock: { api: import('@valley/plugin-sdk').ValleyPluginApi }): void {
@@ -21,6 +21,26 @@ function validatePublishedResults(mock: { api: import('@valley/plugin-sdk').Vall
       return result
     } } as typeof definition)
   })
+}
+
+/** A main pane that behaves like the host's tab placement: an open plugin tab is revealed, `newTab` adds a tab and any other
+ *  open retargets the active tab. The changed layout reaches the plugin after the call returns, as a state update. */
+function simulatedPane(mock: MockValleyApi): LeafPane {
+  const pane: LeafPane = { type: 'leaf', id: 'pane-main', activeTabId: 'note', tabs: [{ id: 'note', folderPath: 'Field notes/moss.md' }] }
+  const listeners = new Set<() => void>()
+  let created = 0
+  vi.spyOn(mock.api, 'subscribe').mockImplementation(listener => { listeners.add(listener); return () => { listeners.delete(listener) } })
+  vi.mocked(mock.api.workspace.captureLayout).mockImplementation(() => ({ layout: structuredClone(pane), activePaneId: pane.id, leftSidebarWidth: 260, leftSidebarVisible: true }))
+  vi.mocked(mock.api.workspace.openMainTab).mockImplementation(options => {
+    setTimeout(() => {
+      const open = pane.tabs.find(tab => tab.kind === 'plugin' && tab.pluginId === 'calendar')
+      if (open) pane.activeTabId = open.id
+      else if (options?.newTab) { const id = `calendar-${++created}`; pane.tabs.push({ id, folderPath: '', kind: 'plugin', pluginId: 'calendar' }); pane.activeTabId = id }
+      else Object.assign(pane.tabs.find(tab => tab.id === pane.activeTabId)!, { kind: 'plugin', pluginId: 'calendar' })
+      listeners.forEach(listener => listener())
+    }, 20)
+  })
+  return pane
 }
 
 describe('calendar commands (bus)', () => {
@@ -110,7 +130,23 @@ describe('calendar commands (bus)', () => {
     expect(await mock.api.commands.execute('calendar:get', { id: event.id })).toMatchObject({ ok: true })
     expect(await mock.api.commands.execute('calendar:set-view', { view: 'week' })).toMatchObject({ ok: true, value: { view: 'week' } })
     expect(await mock.api.commands.execute('calendar:today', undefined)).toMatchObject({ ok: true })
-    expect(await mock.api.commands.execute('calendar:open-page', undefined)).toMatchObject({ ok: true, value: null })
+    simulatedPane(mock)
+    expect(await mock.api.commands.execute('calendar:open-page', undefined)).toMatchObject({ ok: true, value: { tabId: 'calendar-1', opened: 'new' } })
+  })
+
+  it('opens the Calendar page in a new tab beside the current one, or shows the open Calendar tab, and names that tab', async () => {
+    const mock = setup(), pane = simulatedPane(mock)
+    expect(await mock.api.commands.execute('calendar:open-page', undefined)).toEqual({ ok: true, value: { tabId: 'calendar-1', paneId: 'pane-main', opened: 'new', active: true } })
+    expect(mock.api.workspace.openMainTab).toHaveBeenLastCalledWith({ newTab: true })
+    expect(pane.tabs.map(tab => [tab.id, tab.pluginId ?? tab.folderPath])).toEqual([['note', 'Field notes/moss.md'], ['calendar-1', 'calendar']])
+    pane.activeTabId = 'note'
+    expect(await mock.api.commands.execute('calendar:open-page', undefined)).toEqual({ ok: true, value: { tabId: 'calendar-1', paneId: 'pane-main', opened: 'existing', active: true } })
+    expect(mock.api.workspace.openMainTab).toHaveBeenLastCalledWith(undefined)
+    expect(pane.tabs).toHaveLength(2)
+    expect(mock.api.commands.describe('calendar:open-page')).toMatchObject({ sideEffect: 'read' })
+    vi.mocked(mock.api.workspace.openMainTab).mockImplementation(() => {})
+    pane.tabs.pop(); pane.activeTabId = 'note'
+    await expect(openCalendarPage(mock.api, 50)).rejects.toThrow('The Calendar page did not open.')
   })
 
   it('validates contributed source results and actions through the same provider without treating an unavailable owner as success', async () => {

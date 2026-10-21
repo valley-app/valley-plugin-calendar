@@ -34,7 +34,7 @@ function sourceReads() {
           ? record.definition as Record<string, unknown>
           : {}
       ))
-    }, 1)
+    }, 1, undefined, { owner, label: 'Calendar note-date sources', sizeOf: (sources) => 256 + sources.length * 512 })
     const off = subscribeDatasetRevisions(owner, [SOURCES_DATASET], cache.invalidate)
     return { ...cache, dispose: () => { off(); cache.dispose() } }
   })

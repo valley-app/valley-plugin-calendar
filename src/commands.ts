@@ -7,7 +7,7 @@
  * commands persist the shared selection, so they are non-undoable `write`s
  * (`revert: null`); the query commands are `read`.
  */
-import type { CalendarViewMode, EventRecord, TimeControlState, DataRecord } from '@valley/plugin-sdk/types'
+import type { CalendarViewMode, EventRecord, TimeControlState, DataRecord, WorkspaceNode } from '@valley/plugin-sdk/types'
 import type { PluginCommand, ValleyPluginApi, CalendarItemPatch } from '@valley/plugin-sdk'
 import type { CommandSideEffect } from '@valley/plugin-sdk/commands'
 import { loadEvents, newEvent, normalizeEventRecord, rawAppend, rawDelete, rawUpdate } from './events'
@@ -42,7 +42,7 @@ const timeResult = resultObject({ view: { enum: ['month', 'week', 'year'] }, cur
 export const calendarResults: Record<string, Record<string, unknown>> = {
   'list-items': resultList(itemResult, 10000), 'source-actions': resultList(actionResult(3), 100), get: itemResult, open: itemResult, 'close-editor': itemResult, 'edit-fields': itemResult, delete: itemResult,
   sources: resultList(resultObject({ sourceId: resultText, sourceKey: resultText, owner: resultText, version: resultText, methods: resultList(resultText, 100), integration: integrationResult }, ['sourceId', 'sourceKey', 'owner', 'version', 'methods']), 1000),
-  'source-create': { const: true }, 'source-action': { const: true }, 'open-page': { type: 'null' }, add: eventResult, goto: timeResult, 'set-view': timeResult, today: timeResult, list: resultList(eventResult, 10000)
+  'source-create': { const: true }, 'source-action': { const: true }, 'open-page': resultObject({ tabId: resultText, paneId: resultText, opened: { enum: ['new', 'existing'] }, active: resultBoolean }), add: eventResult, goto: timeResult, 'set-view': timeResult, today: timeResult, list: resultList(eventResult, 10000)
 }
 
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '')
@@ -136,6 +136,35 @@ export async function calendarCommandRevision(raw: unknown): Promise<unknown> {
   return input.sourceId ? sourceDescriptors().find((source) => source.sourceId === input.sourceId) ?? null : { day: todayIso() }
 }
 
+interface CalendarTab { tabId: string; paneId: string; active: boolean }
+/** The Calendar page's own main tabs (not per-instance tabs), read from the current workspace layout. */
+function calendarTabs(api: ValleyPluginApi): CalendarTab[] {
+  const { layout, activePaneId } = api.workspace.captureLayout()
+  const tabs: CalendarTab[] = []
+  const visit = (node: WorkspaceNode): void => {
+    if (node.type === 'split') { node.children.forEach(visit); return }
+    for (const tab of node.tabs) if (tab.kind === 'plugin' && tab.pluginId === api.pluginId && !tab.pluginInstanceId) tabs.push({ tabId: tab.id, paneId: node.id, active: node.activeTabId === tab.id && activePaneId === node.id })
+  }
+  visit(layout)
+  return tabs
+}
+
+/** Shows the open Calendar tab, or opens the page in a new tab instead of replacing the current one, and names that tab
+ *  once the layout reports it. */
+export async function openCalendarPage(api: ValleyPluginApi, timeoutMs = 5000): Promise<CalendarTab & { opened: 'new' | 'existing' }> {
+  const before = calendarTabs(api), known = new Set(before.map((tab) => tab.tabId))
+  await api.workspace.openMainTab(before.length ? undefined : { newTab: true })
+  const find = (): CalendarTab | undefined => calendarTabs(api).find((tab) => before.length ? tab.active : !known.has(tab.tabId))
+  const tab = find() ?? await new Promise<CalendarTab>((resolve, reject) => {
+    let off = (): void => {}
+    const timer = setTimeout(() => { off(); reject(new Error('The Calendar page did not open.')) }, timeoutMs)
+    const check = (): void => { const found = find(); if (found) { off(); clearTimeout(timer); resolve(found) } }
+    off = api.subscribe(check)
+    check()
+  })
+  return { ...tab, opened: before.length ? 'existing' : 'new' }
+}
+
 /** Register every `calendar:*` command; returns a combined disposer. */
 export function registerCalendarCommands(api: ValleyPluginApi): () => void {
   const register = <I = void, O = void, E extends CommandSideEffect = 'read'>(definition: PluginCommand<I, O, E>): (() => void) => {
@@ -212,11 +241,8 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       id: 'open-page',
       label: 'Open Calendar page', labelKey: 'auto.b29a9852d77e',
       sideEffect: 'read',
-      run: () => {
-        api.workspace.openMainTab()
-        return null
-      },
-      formatCli: () => 'Opened calendar page.'
+      run: () => openCalendarPage(api),
+      formatCli: (tab) => tab.opened === 'new' ? `Opened the Calendar page in a new tab (${tab.tabId}).` : `Showed the open Calendar tab (${tab.tabId}).`
     }),
 
     register({
