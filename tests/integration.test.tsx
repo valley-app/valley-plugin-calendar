@@ -1656,6 +1656,19 @@ describe('AgendaPanel item clicks', () => {
     expect(container.querySelector('.calendar-reveal-target')).toBeNull()
   })
 
+  it('keeps the day selected when its Agenda date header is clicked again', async () => {
+    patchTimeControl({ selectedDate: '2026-06-08' })
+    const { container } = render(<AgendaPanel />)
+    await screen.findByText('Agenda todo')
+    const header = () => [...container.querySelectorAll('.agenda-day-header')].find(element => element.classList.contains('selected'))
+    expect(header()).toBeDefined()
+    fireEvent.click(header()!)
+    fireEvent.click(header()!)
+    await act(async () => {})
+    expect((await readTimeControl()).selectedDate).toBe('2026-06-08')
+    expect(header()).toBeDefined()
+  })
+
   it('reveals an event from its whole row with the keyboard', async () => {
     render(<AgendaPanel />)
     const title = await screen.findByText('Agenda event')

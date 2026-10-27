@@ -259,7 +259,7 @@ export function AgendaPanel(): ReactElement {
                 <button
                   type="button"
                   className={`agenda-day-header${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}`}
-                  onClick={() => patch({ selectedDate: isSelected ? null : key, rangeStart: null, rangeEnd: null })}
+                  onClick={() => patch({ selectedDate: key, rangeStart: null, rangeEnd: null })}
                 >
                   <span className="agenda-day-dow">{localizedWeekday(date.getDay(), api.ui.language())}</span>
                   <span className="agenda-day-num">{date.getDate()}</span>

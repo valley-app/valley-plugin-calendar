@@ -95,11 +95,24 @@ export function parseCalendarValues(raw: unknown): CalendarItemPatch & { endDate
   for (const key of ['startTime', 'endTime']) if (values[key] && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(values[key]))) throw new Error('Invalid calendar time.')
   return values as CalendarItemPatch & { endDate?: string; groupId?: string }
 }
+/** Years around today searched before the whole range, so a yearly source never has to page through ten thousand years. */
+const TARGET_WINDOW_YEARS = [1, 10, 100]
+
+/** A refusal raised before any effect: the command reports it as not applied instead of uncertain. */
+const notApplied = (error: unknown): Error => Object.assign(error instanceof Error ? error : new Error(String(error)), { outcome: 'not-applied', retryable: false })
+async function beforeEffect<T>(run: () => Promise<T>): Promise<T> {
+  try { return await run() } catch (error) { throw (error as { outcome?: unknown })?.outcome ? error : notApplied(error) }
+}
+
 export async function resolveCalendarTarget(target: CalendarTarget): Promise<CalItem> {
   if (target.sourceId) {
     if (!sourceDescriptors().some((source) => source.sourceId === target.sourceId)) throw new Error('The calendar item provider is unavailable.')
-    const sourced = (await listSourcedItems(true, undefined, undefined, target.sourceId)).find((entry) => entry.sourceId === target.sourceId && entry.item.id === target.id)
-    if (sourced) return sourcedToItem(sourced)
+    const year = new Date().getFullYear()
+    const ranges: [string | undefined, string | undefined][] = TARGET_WINDOW_YEARS.map((years) => [`${String(Math.max(1, year - years)).padStart(4, '0')}-01-01`, `${String(Math.min(9999, year + years)).padStart(4, '0')}-12-31`])
+    for (const [from, to] of [...ranges, [undefined, undefined] as [undefined, undefined]]) {
+      const sourced = (await listSourcedItems(true, from, to, target.sourceId)).find((entry) => entry.sourceId === target.sourceId && entry.item.id === target.id)
+      if (sourced) return sourcedToItem(sourced)
+    }
   } else {
     const local = (await loadEvents()).find((entry) => entry.id === target.id)
     if (local) return eventToItem(local)
@@ -108,10 +121,10 @@ export async function resolveCalendarTarget(target: CalendarTarget): Promise<Cal
   throw new Error('The calendar item no longer exists.')
 }
 export async function editCalendarValues(target: CalendarTarget, values: ReturnType<typeof parseCalendarValues>, expectedUpdatedAt?: string) {
-  const item = await resolveCalendarTarget(target)
-  if (item.readOnly) throw new Error('This calendar item is read-only.')
+  const item = await beforeEffect(() => resolveCalendarTarget(target))
+  if (item.readOnly) throw notApplied(new Error('This calendar item is read-only.'))
   if (target.sourceId) {
-    if (values.groupId !== undefined) throw new Error('This calendar source uses group names.')
+    if (values.groupId !== undefined) throw notApplied(new Error('This calendar source uses group names.'))
     const patch = item.sourced?.endDate && values.date !== undefined && values.endDate === undefined
       ? { ...values, endDate: addDays(item.sourced.endDate, daysBetween(item.sourced.date, values.date)) }
       : values
@@ -119,12 +132,12 @@ export async function editCalendarValues(target: CalendarTarget, values: ReturnT
     return { value: await resolveCalendarTarget(target), revert: null }
   }
   const previous = item.event!
-  if (expectedUpdatedAt !== undefined && previous.updatedAt !== expectedUpdatedAt) throw new Error('This event changed elsewhere. Reload it before saving; your draft is preserved.')
-  if (values.completed !== undefined || values.priority !== undefined || values.group !== undefined) throw new Error('Events use groupId and do not have a task status or priority.')
+  if (expectedUpdatedAt !== undefined && previous.updatedAt !== expectedUpdatedAt) throw notApplied(new Error('This event changed elsewhere. Reload it before saving; your draft is preserved.'))
+  if (values.completed !== undefined || values.priority !== undefined || values.group !== undefined) throw notApplied(new Error('Events use groupId and do not have a task status or priority.'))
   const next = normalizeEventRecord({ ...previous, ...values, allDay: !(values.startTime ?? previous.startTime) && !(values.endTime ?? previous.endTime), updatedAt: new Date().toISOString() } as unknown as DataRecord)
-  if (!next.date || (values.endDate && values.endDate < next.date)) throw new Error('The event end date must follow its start date.')
-  if (values.filePath && next.filePath !== values.filePath) throw new Error('Invalid event file path.')
-  for (const key of ['urls', 'attachments'] as const) if (values[key]?.some((value) => !next[key]?.includes(value))) throw new Error(`Invalid event ${key}.`)
+  if (!next.date || (values.endDate && values.endDate < next.date)) throw notApplied(new Error('The event end date must follow its start date.'))
+  if (values.filePath && next.filePath !== values.filePath) throw notApplied(new Error('Invalid event file path.'))
+  for (const key of ['urls', 'attachments'] as const) if (values[key]?.some((value) => !next[key]?.includes(value))) throw notApplied(new Error(`Invalid event ${key}.`))
   if (!(await rawUpdate(target.id, next, previous.updatedAt))) throw new Error('Could not save the event.')
   return { value: eventToItem(next), revert: { label: `Edit “${previous.title}”`, run: async () => { if (!(await rawUpdate(target.id, previous))) throw new Error('Could not restore the event.') }, reapply: async () => { if (!(await rawUpdate(target.id, next))) throw new Error('Could not reapply the event edit.') } } }
 }
@@ -204,8 +217,8 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       sideEffect: 'write',
       input: { schema: { type: 'object', properties: { id: eventText, sourceId: eventText }, required: ['id'], additionalProperties: false }, parse: parseCalendarTarget },
       run: async (target) => {
-      const item = await resolveCalendarTarget(target)
-      if (item.readOnly) throw new Error('This calendar item is read-only.')
+      const item = await beforeEffect(() => resolveCalendarTarget(target))
+      if (item.readOnly) throw notApplied(new Error('This calendar item is read-only.'))
       if (target.sourceId) { if (!(await removeSourcedItem(target.sourceId, target.id))) throw new Error('Could not delete the calendar source item.'); return { value: item, revert: null } }
       if (!(await rawDelete(target.id))) throw new Error('Could not delete the event.')
       return { value: item, revert: { label: `Delete “${item.title}”`, run: async () => { if (!(await rawAppend(item.event!))) throw new Error('Could not restore the event.') } } }
@@ -232,7 +245,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       paletteSafe: false,
       sideEffect: 'write',
       input: { schema: { type: 'object', properties: { sourceId: eventText, id: eventText, actionId: eventText }, required: ['sourceId', 'id', 'actionId'], additionalProperties: false }, parse: (raw) => { const input = raw as Record<string, unknown>; const target = parseCalendarTarget(raw); if (!target.sourceId || typeof input.actionId !== 'string' || !input.actionId) throw new Error('Expected a source and action id.'); return { sourceId: target.sourceId, id: target.id, actionId: input.actionId } } },
-      run: async ({ sourceId, id, actionId }) => { await resolveCalendarTarget({ sourceId, id }); if (!(await runSourcedItemAction(sourceId, id, actionId))) throw new Error('Could not run the source item action.'); return { value: true, revert: null } },
+      run: async ({ sourceId, id, actionId }) => { await beforeEffect(() => resolveCalendarTarget({ sourceId, id })); if (!(await runSourcedItemAction(sourceId, id, actionId))) throw new Error('Could not run the source item action.'); return { value: true, revert: null } },
       revision: (input) => calendarCommandRevision(input),
       preview: (input) => ({ changes: input })
     }),

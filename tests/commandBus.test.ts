@@ -170,3 +170,55 @@ describe('calendar commands (bus)', () => {
     expect(action).toHaveBeenCalledOnce()
   })
 })
+
+describe('calendar command refusals and yearly sources', () => {
+  function setupWithDefinitions(): { mock: MockValleyApi; run: (id: string, raw: unknown) => Promise<unknown> } {
+    const mock = createMockValleyApi({
+      manifest: { id: 'calendar', datasets: config.datasets as unknown as ValleyPluginManifest['datasets'], noteDocuments: config.noteDocuments },
+      datasets: { 'calendar.events': [], 'calendar.event_tags': [], 'calendar.event_links': [], 'calendar.event_attachments': [] }
+    })
+    const definitions = new Map<string, { run: (input: unknown, context: unknown) => Promise<unknown>; input?: { parse: (raw: unknown) => unknown } }>()
+    const original = mock.api.commands.register
+    vi.spyOn(mock.api.commands, 'register').mockImplementation(definition => {
+      definitions.set(definition.id, definition as never)
+      return original(definition)
+    })
+    initCalendarRuntime(mock.api)
+    registerCalendarCommands(mock.api)
+    const run = (id: string, raw: unknown) => { const definition = definitions.get(id)!; return definition.run(definition.input ? definition.input.parse(raw) : raw, {}) }
+    return { mock, run }
+  }
+
+  it('reports refusals that happen before any effect as not applied', async () => {
+    const { mock, run } = setupWithDefinitions()
+    const created = await mock.api.commands.execute('calendar:add', { title: 'Fern survey', date: '2026-06-20' })
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    const event = created.value as { id: string }
+    await expect(run('edit-fields', { id: event.id, expectedUpdatedAt: 'stale', values: { note: 'Refused' } })).rejects.toMatchObject({ outcome: 'not-applied' })
+    await expect(run('edit-fields', { id: event.id, values: { completed: true } })).rejects.toMatchObject({ outcome: 'not-applied' })
+    await expect(run('delete', { id: 'missing-event' })).rejects.toMatchObject({ outcome: 'not-applied' })
+    await expect(run('source-action', { sourceId: 'missing-source', id: 'oak', actionId: 'edit' })).rejects.toMatchObject({ outcome: 'not-applied' })
+    expect(await mock.api.commands.execute('calendar:get', { id: event.id })).toMatchObject({ ok: true, value: { note: '' } })
+  })
+
+  it('resolves an item of a yearly source without reading ten thousand years', async () => {
+    const { mock } = setupWithDefinitions()
+    const year = new Date().getFullYear()
+    const list = vi.fn(async ({ startDate, endDate, limit, cursor }: { startDate: string; endDate: string; limit: number; cursor?: string }) => {
+      const items: CalendarSourceItem[] = []
+      for (let y = Number(startDate.slice(0, 4)); y <= Number(endDate.slice(0, 4)); y++) {
+        for (const name of ['fern', 'moss']) {
+          const date = `${String(y).padStart(4, '0')}-05-12`
+          if (date >= startDate && date <= endDate) items.push({ id: `${y}|${name}`, title: `Birthday: ${name}`, date, readOnly: true })
+        }
+      }
+      const offset = Number(cursor ?? 0)
+      return { items: items.slice(offset, offset + limit), revision: 'yearly', ...(offset + limit < items.length ? { cursor: String(offset + limit) } : {}) }
+    })
+    mock.provideInterop(CALENDAR_ITEM_SOURCE_V2, { list }, 'birthdays')
+    const sourceId = mock.api.interop.services.providers(CALENDAR_ITEM_SOURCE_V2)[0].providerId
+    expect(await mock.api.commands.execute('calendar:get', { sourceId, id: `${year}|fern` })).toMatchObject({ ok: true, value: { kind: 'sourced', id: `${year}|fern`, date: `${year}-05-12` } })
+    expect(list.mock.calls.every(([request]) => request.startDate >= `${year - 1}-01-01`)).toBe(true)
+  })
+})
