@@ -21,7 +21,7 @@ export const calendarStyles = `
   container: calendar-main / inline-size;
 }
 
-/* Calendar top bar — 37px content invariant (see CLAUDE.md). Full-bleed,
+/* Calendar top bar — 37px content + 1px line, the shared app bar height. Full-bleed,
    sits above the padded body so the grid keeps its own inset. */
 .calendar-topbar {
   position: relative;
@@ -122,6 +122,34 @@ export const calendarStyles = `
     min-width: 20px;
     padding: 0 3px;
     font-size: 0.62rem;
+  }
+}
+
+/* Very narrow main Calendar (both sidebars open in a small window): the view switcher gives up width first, so the
+   daily-note, previous, Today and next controls always stay fully visible. */
+@container calendar-main (max-width: 300px) {
+  .calendar-view-main .calendar-topbar {
+    padding: 0 6px;
+  }
+  .calendar-view-main .calendar-topbar-actions {
+    justify-content: flex-end;
+    gap: 2px;
+  }
+  .calendar-view-main .calendar-topbar .calendar-switcher-inline {
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 0;
+    overflow: hidden;
+  }
+  .calendar-view-main .calendar-topbar .calendar-switcher-btn {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .calendar-view-main .calendar-topbar .calendar-actions {
+    flex: 0 0 auto;
   }
 }
 

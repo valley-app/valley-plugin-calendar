@@ -127,3 +127,18 @@ it('keeps the narrow main month grid and toolbar within the pane', async () => {
   expect(rule('.calendar-view-main .calendar-topbar', narrow)).toMatch(/height:\s*calc\(2 \* var\(--app-bar-height\)\)/)
   expect(rule('.calendar-view-main .calendar-topbar-actions', narrow)).not.toMatch(/flex-wrap:\s*wrap/)
 })
+
+it('lets the view switcher shrink before the navigation controls in a very narrow main Calendar', async () => {
+  const { calendarStyles } = await import('../src/styles/calendar')
+  const narrowest = calendarStyles.slice(calendarStyles.indexOf('@container calendar-main (max-width: 300px)'))
+  expect(narrowest.startsWith('@container calendar-main (max-width: 300px)')).toBe(true)
+  const rule = (selector: string): string => {
+    const start = narrowest.indexOf(`${selector} {`)
+    expect(start, selector).toBeGreaterThanOrEqual(0)
+    return narrowest.slice(start, narrowest.indexOf('}', start))
+  }
+  expect(rule('.calendar-view-main .calendar-topbar .calendar-switcher-inline')).toMatch(/flex:\s*0 1 auto;[\s\S]*min-width:\s*0;[\s\S]*overflow:\s*hidden/)
+  expect(rule('.calendar-view-main .calendar-topbar .calendar-switcher-btn')).toMatch(/text-overflow:\s*ellipsis/)
+  expect(rule('.calendar-view-main .calendar-topbar .calendar-actions')).toMatch(/flex:\s*0 0 auto/)
+  expect(calendarStyles).not.toMatch(/CLAUDE/i)
+})

@@ -1656,6 +1656,20 @@ describe('AgendaPanel item clicks', () => {
     expect(container.querySelector('.calendar-reveal-target')).toBeNull()
   })
 
+  it('moves the main Calendar to a revealed item in another month when a later update leaves the cursor behind', async () => {
+    render(<Calendar variant="main" />)
+    await screen.findByRole('heading', { name: /Jun\s+2026/i })
+    act(() => revealTargetStore().publish({ surface: 'main', sourceId: '', itemId: 'event-agenda', date: '2026-07-12', nonce: 901 }))
+    await act(async () => { await patchTimeControl({ selectedDate: '2026-07-12', cursor: '2026-06-01' }) })
+    expect(await screen.findByRole('heading', { name: /Jul\s+2026/i })).toBeInTheDocument()
+    await waitFor(async () => expect(await readTimeControl()).toMatchObject({ selectedDate: '2026-07-12', cursor: '2026-07-01' }))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Previous' })) })
+    expect(await screen.findByRole('heading', { name: /Jun\s+2026/i })).toBeInTheDocument()
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+    expect((await readTimeControl()).cursor).toBe('2026-06-01')
+    act(() => revealTargetStore().publish(null))
+  })
+
   it('keeps the day selected when its Agenda date header is clicked again', async () => {
     patchTimeControl({ selectedDate: '2026-06-08' })
     const { container } = render(<AgendaPanel />)

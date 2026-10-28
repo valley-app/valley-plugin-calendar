@@ -141,7 +141,10 @@ export function Calendar({
       return { entries, index: entries.length - 1 }
     })
   }, [])
+  const revealRef = React.useRef<{ target: CalendarRevealTarget | null; settled: number | null }>({ target: null, settled: null })
+  revealRef.current.target = revealTarget
   const patch = React.useCallback((p: Partial<TimeControlState>, opts: { pushHistory?: boolean } = {}) => {
+    revealRef.current.settled = revealRef.current.target?.nonce ?? revealRef.current.settled
     const nextEntry: CalendarHistoryEntry = {
       view: p.view ?? view,
       cursor: p.cursor ?? cursor,
@@ -181,6 +184,16 @@ export function Calendar({
     setView_(tc.view ?? defaultTc.view)
     setCursor_(tc.cursor ?? defaultTc.cursor)
   }, [defaultTc.cursor, defaultTc.view, tc.view, tc.cursor])
+  // While a reveal addressed to the main Calendar still holds the selection, keep its month in view until the user
+  // navigates, even when a later time-control update (a tab restore or an out-of-order host notification) leaves the
+  // shared cursor behind the selected date.
+  React.useEffect(() => {
+    if (variant !== 'main' || revealTarget?.surface !== 'main' || revealRef.current.settled === revealTarget.nonce) return
+    const month = `${revealTarget.date.slice(0, 7)}-01`
+    if (tc.selectedDate !== revealTarget.date || tc.cursor === month) return
+    setCursor_(month)
+    patchShared({ cursor: month })
+  }, [patchShared, revealTarget, tc.cursor, tc.selectedDate, variant])
   React.useEffect(() => {
     if (variant !== 'right') return
     return () => api.interop.state.publish(CALENDAR_PANEL_SELECTION_V1, null)
