@@ -157,6 +157,8 @@ it('keeps the switcher labels and weekday headings apart at 200 px main width', 
   expect(rule('.calendar-view-main .calendar-topbar .calendar-switcher-btn[data-short]::before')).toMatch(/content:\s*attr\(data-short\)/)
   const tight = calendarStyles.slice(calendarStyles.indexOf('@container calendar-main (max-width: 260px)'))
   expect(tight.startsWith('@container calendar-main (max-width: 260px)')).toBe(true)
-  expect(rule('.calendar-view-main [data-narrow]', tight)).toMatch(/font-size:\s*0;/)
-  expect(rule('.calendar-view-main [data-narrow]::before', tight)).toMatch(/content:\s*attr\(data-narrow\)/)
+  expect(rule('.calendar-view-main .calendar-weekgrid-dow[data-narrow]', tight)).toMatch(/font-size:\s*0;/)
+  expect(rule('.calendar-view-main .calendar-weekgrid-dow[data-narrow]::before', tight)).toMatch(/content:\s*attr\(data-narrow\)/)
+  // The narrow form must outrank the compact grid's later heading font size, so it uses an attribute selector on the heading class.
+  expect(tight).toMatch(/\.calendar-view-main \.calendar-day-heading\[data-narrow\],/)
 })

@@ -163,10 +163,12 @@ export const calendarStyles = `
 
 /* At about 200 px the short weekday names would touch: show the one-letter form; the element text keeps the short name. */
 @container calendar-main (max-width: 260px) {
-  .calendar-view-main [data-narrow] {
+  .calendar-view-main .calendar-day-heading[data-narrow],
+  .calendar-view-main .calendar-weekgrid-dow[data-narrow] {
     font-size: 0;
   }
-  .calendar-view-main [data-narrow]::before {
+  .calendar-view-main .calendar-day-heading[data-narrow]::before,
+  .calendar-view-main .calendar-weekgrid-dow[data-narrow]::before {
     content: attr(data-narrow);
     font-size: 0.68rem;
   }
