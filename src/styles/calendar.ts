@@ -138,18 +138,37 @@ export const calendarStyles = `
   .calendar-view-main .calendar-topbar .calendar-switcher-inline {
     flex: 0 1 auto;
     min-width: 0;
-    gap: 0;
+    gap: 2px;
     overflow: hidden;
   }
   .calendar-view-main .calendar-topbar .calendar-switcher-btn {
-    flex: 0 1 auto;
-    min-width: 0;
+    flex: 0 0 auto;
+    min-width: 20px;
+    padding: 0 4px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .calendar-view-main .calendar-topbar .calendar-switcher-btn[data-short] {
+    font-size: 0;
+  }
+  .calendar-view-main .calendar-topbar .calendar-switcher-btn[data-short]::before {
+    content: attr(data-short);
+    font-size: 0.64rem;
+  }
   .calendar-view-main .calendar-topbar .calendar-actions {
     flex: 0 0 auto;
+  }
+}
+
+/* At about 200 px the short weekday names would touch: show the one-letter form; the element text keeps the short name. */
+@container calendar-main (max-width: 260px) {
+  .calendar-view-main [data-narrow] {
+    font-size: 0;
+  }
+  .calendar-view-main [data-narrow]::before {
+    content: attr(data-narrow);
+    font-size: 0.68rem;
   }
 }
 

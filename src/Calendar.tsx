@@ -577,17 +577,23 @@ export function Calendar({
     }
   })
 
-  const switcherButtons = (['week', 'month', 'year'] as CalendarViewMode[]).map((mode) => (
-    <button
-      key={mode}
-      role="tab"
-      aria-selected={view === mode}
-      className={`calendar-switcher-btn ${view === mode ? 'active' : ''}`}
-      onClick={() => setView(mode)}
-    >
-      {mode === 'month' ? uiText('auto.082bc378cd60') : mode === 'week' ? uiText('auto.f82be68a7fb4') : uiText('auto.879e32326c52')}
-    </button>
-  ))
+  const switcherButtons = (['week', 'month', 'year'] as CalendarViewMode[]).map((mode) => {
+    const label = mode === 'month' ? uiText('auto.082bc378cd60') : mode === 'week' ? uiText('auto.f82be68a7fb4') : uiText('auto.879e32326c52')
+    return (
+      <button
+        key={mode}
+        role="tab"
+        aria-selected={view === mode}
+        aria-label={label}
+        title={label}
+        data-short={Array.from(label)[0]}
+        className={`calendar-switcher-btn ${view === mode ? 'active' : ''}`}
+        onClick={() => setView(mode)}
+      >
+        {label}
+      </button>
+    )
+  })
 
   const navActions = (
     <div className="calendar-actions">

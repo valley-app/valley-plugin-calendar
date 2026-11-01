@@ -116,7 +116,7 @@ export function MonthGrid({
     <div className="calendar-grid" onMouseUp={onRangeEnd}>
       <div className="calendar-week-heading">W</div>
       {orderedWeekdayIndices(weekStart).map((day) => (
-        <div className="calendar-day-heading" key={day}>{localizedWeekday(day, api.ui.language())}</div>
+        <div className="calendar-day-heading" key={day} data-narrow={localizedWeekday(day, api.ui.language(), 'narrow')}>{localizedWeekday(day, api.ui.language())}</div>
       ))}
       {Array.from({ length: 6 }, (_, week) => (
         <React.Fragment key={week}>

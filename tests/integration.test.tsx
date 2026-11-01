@@ -1656,6 +1656,18 @@ describe('AgendaPanel item clicks', () => {
     expect(container.querySelector('.calendar-reveal-target')).toBeNull()
   })
 
+  it('names each view switcher button and weekday heading with its full label and a one-letter narrow form', async () => {
+    const { container } = render(<Calendar variant="main" />)
+    await screen.findByRole('heading', { name: /Jun\s+2026/i })
+    const month = screen.getByRole('tab', { name: 'Month' })
+    expect(month).toHaveAttribute('title', 'Month')
+    expect(month).toHaveAttribute('data-short', 'M')
+    expect(month.textContent).toBe('Month')
+    const heading = container.querySelector('.calendar-day-heading')!
+    expect(heading.textContent).toMatch(/^\S{2,}/)
+    expect(heading.getAttribute('data-narrow')).toMatch(/^\S$/)
+  })
+
   it('moves the main Calendar to a revealed item in another month when a later update leaves the cursor behind', async () => {
     render(<Calendar variant="main" />)
     await screen.findByRole('heading', { name: /Jun\s+2026/i })

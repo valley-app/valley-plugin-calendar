@@ -142,3 +142,21 @@ it('lets the view switcher shrink before the navigation controls in a very narro
   expect(rule('.calendar-view-main .calendar-topbar .calendar-actions')).toMatch(/flex:\s*0 0 auto/)
   expect(calendarStyles).not.toMatch(/CLAUDE/i)
 })
+
+it('keeps the switcher labels and weekday headings apart at 200 px main width', async () => {
+  const { calendarStyles } = await import('../src/styles/calendar')
+  const narrowest = calendarStyles.slice(calendarStyles.indexOf('@container calendar-main (max-width: 300px)'))
+  const rule = (selector: string, css = narrowest): string => {
+    const start = css.indexOf(`${selector} {`)
+    expect(start, selector).toBeGreaterThanOrEqual(0)
+    return css.slice(start, css.indexOf('}', start))
+  }
+  expect(rule('.calendar-view-main .calendar-topbar .calendar-switcher-inline')).toMatch(/gap:\s*2px/)
+  expect(rule('.calendar-view-main .calendar-topbar .calendar-switcher-btn')).toMatch(/min-width:\s*20px/)
+  expect(rule('.calendar-view-main .calendar-topbar .calendar-switcher-btn[data-short]')).toMatch(/font-size:\s*0;/)
+  expect(rule('.calendar-view-main .calendar-topbar .calendar-switcher-btn[data-short]::before')).toMatch(/content:\s*attr\(data-short\)/)
+  const tight = calendarStyles.slice(calendarStyles.indexOf('@container calendar-main (max-width: 260px)'))
+  expect(tight.startsWith('@container calendar-main (max-width: 260px)')).toBe(true)
+  expect(rule('.calendar-view-main [data-narrow]', tight)).toMatch(/font-size:\s*0;/)
+  expect(rule('.calendar-view-main [data-narrow]::before', tight)).toMatch(/content:\s*attr\(data-narrow\)/)
+})

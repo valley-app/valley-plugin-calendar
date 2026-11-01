@@ -318,7 +318,7 @@ export function WeekGrid({
                 className={`calendar-weekgrid-dayhead${sameDay(d, today) ? ' today' : ''}${isSel ? ' selected' : ''}`}
                 onClick={() => onPickDay?.(d)}
               >
-                <span className="calendar-weekgrid-dow">{localizedWeekday(d.getDay(), api.ui.language())}</span>
+                <span className="calendar-weekgrid-dow" data-narrow={localizedWeekday(d.getDay(), api.ui.language(), 'narrow')}>{localizedWeekday(d.getDay(), api.ui.language())}</span>
                 <span className="calendar-weekgrid-dom">{d.getDate()}</span>
               </button>
             )
