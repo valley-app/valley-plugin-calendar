@@ -56,6 +56,7 @@ function setupCalendarApi(opts: {
   providerOpen?: (itemId: string) => void
   providerEdit?: (itemId: string) => void
   providerUpdate?: () => Promise<boolean>
+  sourceDelay?: Promise<void>
 } = {}): MockValleyApi {
   // `opts.todos` is seeded as a *contributed* `calendar.itemSource`, exactly how
   // the Todo plugin registers itself — Calendar has no access to Todo's datasets and
@@ -128,7 +129,7 @@ function setupCalendarApi(opts: {
       author: 'Cedar Lab',
       description: 'Structured task manager.'
     },
-    list: pagedSource(async () => sourceItems),
+    list: pagedSource(async () => { await opts.sourceDelay; return sourceItems }),
     create: async () => true,
     update: async (id: string, patch: { completed?: boolean }) => {
       if (opts.providerUpdate && !await opts.providerUpdate()) return false
@@ -1492,6 +1493,37 @@ describe('AgendaPanel virtualization', () => {
     await act(async () => { await patchTimeControl({ selectedDate: '2026-03-15', cursor: '2026-03-01' }) })
     await waitFor(() => expect(sections()).toContain('2026-03-15'))
     expect(container.querySelector('[data-visible-key="2026-03-15"] .agenda-card-title')?.textContent).toBe('Survey 73')
+  })
+})
+
+describe('AgendaPanel initial scroll', () => {
+  const dayOffset = (offset: number): string => {
+    const date = new Date()
+    date.setDate(date.getDate() + offset)
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  }
+  const scrolledKeys = (): (string | undefined)[] => vi.mocked(Element.prototype.scrollIntoView).mock.contexts.map((element) => (element as HTMLElement).dataset.visibleKey)
+  async function openWithLateSource(beforeRelease?: (container: HTMLElement) => void): Promise<void> {
+    let release!: () => void
+    const sourceDelay = new Promise<void>((resolve) => { release = resolve })
+    const events = Array.from({ length: 5 }, (_, index) => ({ id: `past-${index}`, title: `Past survey ${index}`, date: dayOffset(-40 - index) }) as DataRecord)
+    setupCalendarApi({ events, sourceDelay, todos: [{ id: 'soon', title: 'Soon', dueDate: dayOffset(2) }, { id: 'later', title: 'Later', dueDate: dayOffset(200) }] })
+    await act(async () => { await patchTimeControl({ view: 'month', cursor: `${dayOffset(0).slice(0, 8)}01`, selectedDate: null, rangeStart: null, rangeEnd: null }) })
+    const { container } = render(React.createElement(AgendaPanel))
+    await waitFor(() => expect(container.querySelector('[data-visible-key]')).toBeTruthy())
+    vi.mocked(Element.prototype.scrollIntoView).mockClear()
+    beforeRelease?.(container)
+    await act(async () => { release(); await sourceDelay })
+    await waitFor(() => expect(container.querySelector(`[data-visible-key="${dayOffset(200)}"]`)).toBeTruthy())
+  }
+  it('scrolls to the nearest day from today once a later page brings it', async () => {
+    await openWithLateSource()
+    await waitFor(() => expect(scrolledKeys()).toContain(dayOffset(2)))
+  })
+  it('leaves the list where the user scrolled it before the later page arrived', async () => {
+    await openWithLateSource((container) => fireEvent.wheel(container.querySelector('.agenda-body')!, { deltaY: 120 }))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    expect(scrolledKeys()).not.toContain(dayOffset(2))
   })
 })
 

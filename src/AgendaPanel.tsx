@@ -153,11 +153,26 @@ export function AgendaPanel(): ReactElement {
     show(key, { block: 'start', behavior: scrollBehavior(sectionRefs.current.get(key)) })
   }, [scrollBehavior, show])
 
+  // Items arrive in pages from several sources, so the first page may not hold the days around today yet: keep
+  // aiming at today (or the nearest later day) as pages arrive, until the user scrolls or picks a date.
+  const initialTarget = React.useRef<string | undefined>(undefined)
+  React.useEffect(() => {
+    const body = bodyRef.current
+    if (!body) return
+    const stop = (): void => { didInitialScroll.current = true }
+    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const
+    events.forEach((type) => body.addEventListener(type, stop, { passive: true }))
+    return () => events.forEach((type) => body.removeEventListener(type, stop))
+  }, [])
+  React.useEffect(() => {
+    if (tc.selectedDate || revealTarget) didInitialScroll.current = true
+  }, [revealTarget, tc.selectedDate])
   React.useEffect(() => {
     if (didInitialScroll.current || days.length === 0) return
     const target = days.includes(todayKey) ? todayKey : [...days].reverse().find((k) => k >= todayKey)
-    didInitialScroll.current = true
-    if (target) show(target, { block: 'start' })
+    if (!target || target === initialTarget.current) return
+    initialTarget.current = target
+    show(target, { block: 'start' })
   }, [days, show, todayKey])
 
   React.useEffect(() => {
