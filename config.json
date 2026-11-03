@@ -678,7 +678,8 @@
                   {
                     "id": "output",
                     "label": "Output",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "labelKey": "auto.4bed336194a9"
                   }
                 ],
                 "parameterSchema": {
@@ -695,7 +696,8 @@
                 "readiness": {
                   "state": "Available"
                 },
-                "description": "Event created. Uses committed owner data and authenticated causation."
+                "description": "Event created. Uses committed owner data and authenticated causation.",
+                "descriptionKey": "auto.eebb15d3cbff"
               },
               {
                 "id": "event.updated",
@@ -706,7 +708,8 @@
                   {
                     "id": "output",
                     "label": "Output",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "labelKey": "auto.4bed336194a9"
                   }
                 ],
                 "parameterSchema": {
@@ -723,7 +726,8 @@
                 "readiness": {
                   "state": "Available"
                 },
-                "description": "Event updated. Uses committed owner data and authenticated causation."
+                "description": "Event updated. Uses committed owner data and authenticated causation.",
+                "descriptionKey": "auto.85b958ed6464"
               },
               {
                 "id": "event.create",
@@ -733,7 +737,8 @@
                   {
                     "id": "input",
                     "label": "Input",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "labelKey": "auto.b568d47f2e24"
                   }
                 ],
                 "outputs": [
@@ -855,7 +860,8 @@
                         "updatedAt"
                       ],
                       "additionalProperties": false
-                    }
+                    },
+                    "labelKey": "auto.4bed336194a9"
                   }
                 ],
                 "parameterSchema": {
@@ -1033,7 +1039,8 @@
                     "updatedAt"
                   ],
                   "additionalProperties": false
-                }
+                },
+                "descriptionKey": "auto.3041bbe8a287"
               },
               {
                 "id": "event.get",
@@ -1043,7 +1050,8 @@
                   {
                     "id": "input",
                     "label": "Input",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "labelKey": "auto.b568d47f2e24"
                   }
                 ],
                 "outputs": [
@@ -1165,7 +1173,8 @@
                         "updatedAt"
                       ],
                       "additionalProperties": false
-                    }
+                    },
+                    "labelKey": "auto.4bed336194a9"
                   }
                 ],
                 "parameterSchema": {
@@ -1307,7 +1316,8 @@
                     "updatedAt"
                   ],
                   "additionalProperties": false
-                }
+                },
+                "descriptionKey": "auto.930292e7799b"
               },
               {
                 "id": "event.list",
@@ -1317,7 +1327,8 @@
                   {
                     "id": "input",
                     "label": "Input",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "labelKey": "auto.b568d47f2e24"
                   }
                 ],
                 "outputs": [
@@ -1439,7 +1450,8 @@
                         "updatedAt"
                       ],
                       "additionalProperties": false
-                    }
+                    },
+                    "labelKey": "auto.4bed336194a9"
                   }
                 ],
                 "parameterSchema": {
@@ -1597,7 +1609,8 @@
                     "updatedAt"
                   ],
                   "additionalProperties": false
-                }
+                },
+                "descriptionKey": "auto.378832c87768"
               },
               {
                 "id": "event.update",
@@ -1607,7 +1620,8 @@
                   {
                     "id": "input",
                     "label": "Input",
-                    "dataType": "json"
+                    "dataType": "json",
+                    "labelKey": "auto.b568d47f2e24"
                   }
                 ],
                 "outputs": [
@@ -1729,7 +1743,8 @@
                         "updatedAt"
                       ],
                       "additionalProperties": false
-                    }
+                    },
+                    "labelKey": "auto.4bed336194a9"
                   }
                 ],
                 "parameterSchema": {
@@ -1913,7 +1928,8 @@
                     "updatedAt"
                   ],
                   "additionalProperties": false
-                }
+                },
+                "descriptionKey": "auto.bf96485401a9"
               },
               {
                 "id": "event.delete",
@@ -1931,7 +1947,8 @@
                     "dataType": "json",
                     "schema": {
                       "type": "object"
-                    }
+                    },
+                    "labelKey": "auto.b568d47f2e24"
                   }
                 ],
                 "outputs": [
@@ -1955,7 +1972,8 @@
                       ],
                       "additionalProperties": false,
                       "$schema": "http://json-schema.org/draft-07/schema#"
-                    }
+                    },
+                    "labelKey": "auto.5faa59d4bc37"
                   }
                 ],
                 "parameterSchema": {
@@ -2009,7 +2027,8 @@
                 },
                 "readiness": {
                   "state": "Available"
-                }
+                },
+                "descriptionKey": "auto.18271ecb9d1d"
               }
             ]
           },
@@ -2194,7 +2213,8 @@
                   "items"
                 ],
                 "additionalProperties": false
-              }
+              },
+              "descriptionKey": "auto.b8d8b9a91970"
             },
             {
               "id": "event.get",
@@ -2355,7 +2375,8 @@
                   "items"
                 ],
                 "additionalProperties": false
-              }
+              },
+              "descriptionKey": "auto.ab857bf531f7"
             },
             {
               "id": "event.list",
@@ -2525,7 +2546,8 @@
                   "items"
                 ],
                 "additionalProperties": false
-              }
+              },
+              "descriptionKey": "auto.f24627c37bb3"
             },
             {
               "id": "event.update",
@@ -2710,7 +2732,8 @@
                   "items"
                 ],
                 "additionalProperties": false
-              }
+              },
+              "descriptionKey": "auto.361421780df6"
             }
           ]
         }
@@ -2768,7 +2791,8 @@
               ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
-            }
+            },
+            "descriptionKey": "auto.07732a66df2c"
           }
         }
       },
@@ -2879,7 +2903,8 @@
           "minimum": 0,
           "maximum": 23
         },
-        "default": 7
+        "default": 7,
+        "labelKey": "auto.46fbb53a9be2"
       },
       {
         "key": "dayEndHour",
@@ -2891,7 +2916,8 @@
           "minimum": 1,
           "maximum": 24
         },
-        "default": 22
+        "default": 22,
+        "labelKey": "auto.97226d863751"
       },
       {
         "key": "itemClickTarget",
@@ -2905,7 +2931,8 @@
             "agenda"
           ]
         },
-        "default": "owner"
+        "default": "owner",
+        "labelKey": "auto.2b131f84c054"
       },
       {
         "key": "dailyNotesFolder",
@@ -2915,7 +2942,8 @@
         "schema": {
           "type": "string"
         },
-        "default": ""
+        "default": "",
+        "labelKey": "auto.0f5565670ae9"
       },
       {
         "key": "calendarFolder",
@@ -2925,7 +2953,8 @@
         "schema": {
           "type": "string"
         },
-        "default": ""
+        "default": "",
+        "labelKey": "auto.400e0b4b2cbf"
       },
       {
         "key": "hiddenSources",
@@ -2938,7 +2967,8 @@
             "type": "string"
           }
         },
-        "default": []
+        "default": [],
+        "labelKey": "auto.1898aacd43ba"
       },
       {
         "key": "hiddenGroups",
@@ -2951,7 +2981,8 @@
             "type": "string"
           }
         },
-        "default": []
+        "default": [],
+        "labelKey": "auto.c46325ccec8f"
       },
       {
         "key": "reminderOffsets",
@@ -2967,7 +2998,8 @@
         },
         "default": [
           10
-        ]
+        ],
+        "labelKey": "auto.41574d6657d9"
       },
       {
         "key": "mainView",
@@ -2983,7 +3015,8 @@
             "year"
           ]
         },
-        "default": "week"
+        "default": "week",
+        "labelKey": "auto.c32f0f2d9b49"
       },
       {
         "key": "sidebarView",
@@ -2999,7 +3032,8 @@
             "year"
           ]
         },
-        "default": "week"
+        "default": "week",
+        "labelKey": "auto.fd84716b23ca"
       }
     ]
   }

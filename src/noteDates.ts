@@ -4,6 +4,7 @@ export type NoteDateIndexEntry = Pick<IndexEntry, 'relPath' | 'title' | 'kind' |
 import { asBool, asString, asTime } from '@valley/plugin-sdk/normalize'
 import { nextPaletteColor } from '@valley/plugin-sdk/palette'
 import { daysInMonth, isRealCalendarDate, parseDateByPattern } from '@valley/plugin-sdk/datePattern'
+import { uiText } from './localization'
 
 /**
  * Which parts of the note's date must equal the day it lands on — and therefore
@@ -161,7 +162,7 @@ export const NOTE_DATE_PRESETS: readonly NoteDatePreset[] = [
     labelKey: 'calendar.noteDatePreset.birthdays',
     label: 'Birthdays',
     patch: {
-      title: 'Birthdays',
+      title: uiText('auto.9cfef1156573'),
       matchKey: 'type',
       matchValue: 'contact',
       dateField: 'birthdate',
@@ -177,7 +178,7 @@ export const NOTE_DATE_PRESETS: readonly NoteDatePreset[] = [
     labelKey: 'calendar.noteDatePreset.anniversaries',
     label: 'Anniversaries',
     patch: {
-      title: 'Anniversaries',
+      title: uiText('auto.a6f323b95de5'),
       matchKey: 'type',
       matchValue: 'anniversary',
       dateField: 'date',
@@ -191,7 +192,7 @@ export const NOTE_DATE_PRESETS: readonly NoteDatePreset[] = [
     labelKey: 'calendar.noteDatePreset.deadlines',
     label: 'Deadlines',
     patch: {
-      title: 'Deadlines',
+      title: uiText('auto.091bd72f5876'),
       matchKey: 'type',
       matchValue: 'project',
       dateField: 'due',
