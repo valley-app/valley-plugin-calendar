@@ -41,6 +41,8 @@ export function useVisibleRange(React: ReactApi, options: {
   ref: RefObject<HTMLDivElement>
   render(render: (index: number) => ReactNode): ReactNode[]
   show(id: string, scroll?: ScrollIntoViewOptions): void
+  /** Current (measured or estimated) offset of a row from the top of the list. */
+  offsetOf(id: string): number | undefined
 } {
   const { ids, estimate, pinned = [], layoutKey } = options
   const enabled = options.enabled ?? ids.length > 80
@@ -172,6 +174,7 @@ export function useVisibleRange(React: ReactApi, options: {
     setRequested(null)
   }, [requested, rows, readViewport])
   const show = React.useCallback((id: string, scroll?: ScrollIntoViewOptions) => { setRequested({ id, scroll }) }, [])
+  const offsetOf = React.useCallback((id: string) => model.current.rows.find(row => row.id === id)?.start, [])
   const [from, to] = enabled ? visibleRange(rows, viewport) : [0, rows.length]
   const visible = new Set<number>()
   for (let index = from; index < to; index++) visible.add(index)
@@ -180,6 +183,7 @@ export function useVisibleRange(React: ReactApi, options: {
   return {
     ref,
     show,
+    offsetOf,
     render(render) {
       const output: ReactNode[] = []
       let end = 0

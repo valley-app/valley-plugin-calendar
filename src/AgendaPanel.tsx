@@ -121,7 +121,27 @@ export function AgendaPanel(): ReactElement {
     : null, [revealTarget, visibleItems])
   const estimate = React.useCallback((key: string, index: number) => estimateDay(byDay.get(key)?.length ?? 0, index === 0), [byDay])
   const sections = useVisibleRange(React, { ids: days, estimate, pinned: [tc.selectedDate, revealDay] })
-  const { show } = sections
+  const { show, offsetOf } = sections
+  // Keep the first visible day in place when days are added or removed above it (items arrive in pages around the
+  // focused year), as the browser's scroll anchoring did before the list rendered only the days near the viewport.
+  const anchorRef = React.useRef<{ key: string; start: number } | null>(null)
+  const recordAnchor = React.useCallback((): void => {
+    const body = bodyRef.current
+    if (!body) return
+    const top = body.getBoundingClientRect().top
+    const first = [...body.querySelectorAll<HTMLElement>('.agenda-days > .agenda-section')].find((section) => section.getBoundingClientRect().bottom > top)
+    const key = first?.dataset.visibleKey
+    const start = key === undefined ? undefined : offsetOf(key)
+    anchorRef.current = key !== undefined && start !== undefined ? { key, start } : null
+  }, [offsetOf])
+  React.useLayoutEffect(() => {
+    const body = bodyRef.current, anchor = anchorRef.current
+    if (!body || !anchor) return
+    const start = offsetOf(anchor.key)
+    if (start === undefined) { anchorRef.current = null; return }
+    if (start !== anchor.start) body.scrollTop += start - anchor.start
+    anchor.start = start
+  }, [days, offsetOf])
   /** Smooth scrolling only within about a screen; a farther target jumps, because the rows between are still estimates. */
   const scrollBehavior = React.useCallback((element: HTMLElement | undefined): ScrollBehavior => {
     const root = bodyRef.current
@@ -162,6 +182,7 @@ export function AgendaPanel(): ReactElement {
     const root = bodyRef.current
     if (!root) return
     const update = (): void => {
+      recordAnchor()
       const el = sectionRefs.current.get(todayKey)
       if (!el) {
         setTodayVisible(false)
@@ -174,7 +195,7 @@ export function AgendaPanel(): ReactElement {
     root.addEventListener('scroll', update, { passive: true })
     update()
     return () => root.removeEventListener('scroll', update)
-  }, [todayKey, days])
+  }, [todayKey, days, recordAnchor])
 
   function scrollToToday(): void {
     if (days.includes(todayKey)) showDay(todayKey)
