@@ -1,10 +1,11 @@
 import Ajv2020 from 'ajv/dist/2020'
 import { describe, expect, it, vi } from 'vitest'
 import type { DataRecord, LeafPane, ValleyPluginManifest } from '@valley/plugin-sdk/types'
-import { CALENDAR_ITEM_SOURCE_V2, type CalendarItemPatch, type CalendarSourceItem } from '@valley/plugin-sdk'
+import { CALENDAR_ITEM_SOURCE_V2, PLUGIN_SURFACE_V1, type CalendarItemPatch, type CalendarSourceItem } from '@valley/plugin-sdk'
 import { createMockValleyApi, type MockValleyApi } from './harness'
 import { initRuntime as initCalendarRuntime } from '../src/runtime'
 import { openCalendarPage, registerCalendarCommands } from '../src/commands'
+import { registerCalendarSurfaces } from '../src/surfaces'
 import config from '../config.json'
 
 function validatePublishedResults(mock: { api: import('@valley/plugin-sdk').ValleyPluginApi }): void {
@@ -132,6 +133,24 @@ describe('calendar commands (bus)', () => {
     expect(await mock.api.commands.execute('calendar:today', undefined)).toMatchObject({ ok: true })
     simulatedPane(mock)
     expect(await mock.api.commands.execute('calendar:open-page', undefined)).toMatchObject({ ok: true, value: { tabId: 'calendar-1', opened: 'new' } })
+  })
+
+  it('opens the main Calendar page at a requested date and view, and keeps it there when the page then resumes an older saved view', async () => {
+    const mock = setup(), pane = simulatedPane(mock)
+    registerCalendarSurfaces(mock.api)
+    const opened = await mock.api.commands.execute('calendar:open-date', { date: '2026-11-20', view: 'week' })
+    expect(opened).toMatchObject({ ok: true, value: { tabId: 'calendar-1', paneId: 'pane-main', opened: 'new', active: true, time: { view: 'week', cursor: '2026-11-01', selectedDate: '2026-11-20' } } })
+    expect(mock.api.settings.get().mainView).toBe('week')
+    expect(pane.tabs.map(tab => tab.id)).toEqual(['note', 'calendar-1'])
+    expect(mock.api.commands.describe('calendar:open-date')).toMatchObject({ sideEffect: 'write' })
+    const main = mock.api.interop.extensions.providers(PLUGIN_SURFACE_V1).find((entry) => entry.extension.surface === 'main_workspace')!.extension
+    await main.restore({ v: 1, view: 'month', cursor: '2027-01-01', selectedDate: '2027-01-01' }, 'calendar-1', { background: true })
+    expect(await mock.api.workspace.getTimeControl()).toMatchObject({ view: 'week', cursor: '2026-11-01', selectedDate: '2026-11-20' })
+    expect(mock.api.settings.get().mainView).toBe('week')
+    await main.restore({ v: 1, view: 'month', cursor: '2027-01-01', selectedDate: '2027-01-01' }, 'calendar-1', { background: true })
+    expect(await mock.api.workspace.getTimeControl()).toMatchObject({ cursor: '2027-01-01', selectedDate: '2027-01-01' })
+    expect(await mock.api.commands.execute('calendar:open-date', { date: 'soon' })).toMatchObject({ ok: false })
+    expect(await mock.api.commands.execute('calendar:open-date', { date: '2026-11-20', view: 'day' })).toMatchObject({ ok: false })
   })
 
   it('opens the Calendar page in a new tab beside the current one, or shows the open Calendar tab, and names that tab', async () => {

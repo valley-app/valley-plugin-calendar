@@ -613,6 +613,9 @@
             "open-page": {
               "decision": "deny"
             },
+            "open-date": {
+              "decision": "deny"
+            },
             "goto": {
               "decision": "deny"
             },

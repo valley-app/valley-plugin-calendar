@@ -12,7 +12,8 @@ export const agendaStyles = `/* ── Agenda panel header actions ────�
 .calendar-agenda-panel .panel-header { width: 100%; }
 .agenda-body { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; padding: 0 calc(var(--space-3) / 2) var(--space-4); }
 .agenda-section { display: flex; flex-direction: column; gap: 4px; }
-.agenda-section + .agenda-section { margin-top: var(--space-3); }
+.agenda-days { display: flex; flex: 0 0 auto; flex-direction: column; min-width: 0; }
+.agenda-section-spaced { padding-top: var(--space-3); }
 .agenda-year-sep {
   font-size: var(--small-font-size);
   font-weight: var(--font-semi-bold);

@@ -14,6 +14,7 @@ import { loadEvents, newEvent, normalizeEventRecord, rawAppend, rawDelete, rawUp
 import { listSourcedItems, sourceDescriptors, sourcedItemActions, updateSourcedItem, removeSourcedItem, createSourcedItem, runSourcedItemAction } from './itemSources'
 import { calendarEditRequestStore, eventToItem, sourcedToItem, requestCalendarItemEdit, type CalItem } from './items'
 import { addDays, daysBetween } from './dateMath'
+import { markExplicitCalendarNavigation } from './runtime'
 
 const resultText = { type: 'string', maxLength: 65536 }
 const resultBoolean = { type: 'boolean' }
@@ -42,7 +43,7 @@ const timeResult = resultObject({ view: { enum: ['month', 'week', 'year'] }, cur
 export const calendarResults: Record<string, Record<string, unknown>> = {
   'list-items': resultList(itemResult, 10000), 'source-actions': resultList(actionResult(3), 100), get: itemResult, open: itemResult, 'close-editor': itemResult, 'edit-fields': itemResult, delete: itemResult,
   sources: resultList(resultObject({ sourceId: resultText, sourceKey: resultText, owner: resultText, version: resultText, methods: resultList(resultText, 100), integration: integrationResult }, ['sourceId', 'sourceKey', 'owner', 'version', 'methods']), 1000),
-  'source-create': { const: true }, 'source-action': { const: true }, 'open-page': resultObject({ tabId: resultText, paneId: resultText, opened: { enum: ['new', 'existing'] }, active: resultBoolean }), add: eventResult, goto: timeResult, 'set-view': timeResult, today: timeResult, list: resultList(eventResult, 10000)
+  'source-create': { const: true }, 'source-action': { const: true }, 'open-page': resultObject({ tabId: resultText, paneId: resultText, opened: { enum: ['new', 'existing'] }, active: resultBoolean }), 'open-date': resultObject({ tabId: resultText, paneId: resultText, opened: { enum: ['new', 'existing'] }, active: resultBoolean, time: timeResult }), add: eventResult, goto: timeResult, 'set-view': timeResult, today: timeResult, list: resultList(eventResult, 10000)
 }
 
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '')
@@ -259,6 +260,34 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
     }),
 
     register({
+      id: 'open-date',
+      label: 'Calendar: Open the Calendar page at a date', labelKey: 'calendar.command.openDate',
+      paletteSafe: false,
+      sideEffect: 'write',
+      input: {
+        schema: { type: 'object', properties: { date: { type: 'string' }, view: { type: 'string', enum: VIEWS } }, required: ['date'], additionalProperties: false },
+        parse: (raw) => {
+          const input = (raw ?? {}) as Record<string, unknown>
+          const date = datePart(asStr(input.date))
+          if (!date) throw new Error('Usage: calendar open-date <YYYY-MM-DD> [month|week|year]')
+          const view = input.view === undefined ? undefined : asStr(input.view).toLowerCase()
+          if (view !== undefined && !(VIEWS as string[]).includes(view)) throw new Error(`Usage: calendar open-date <YYYY-MM-DD> [${VIEWS.join('|')}]`)
+          return { date, ...(view ? { view: view as CalendarViewMode } : {}) }
+        },
+        fromCli: (args) => ({ date: args[0], ...(args[1] ? { view: args[1].toLowerCase() } : {}) })
+      },
+      run: async ({ date, view }) => {
+        markExplicitCalendarNavigation(view)
+        if (view) await api.settings.set('mainView', view)
+        const time = await api.workspace.patchTimeControl({ ...selectionPatch(date), ...(view ? { view } : {}), rangeStart: null, rangeEnd: null })
+        return { value: { ...await openCalendarPage(api), time }, revert: null }
+      },
+      revision: () => timeControlRevision(),
+      preview: ({ date, view }) => ({ ...selectionPatch(date), ...(view ? { view } : {}) }),
+      formatCli: (result) => `Calendar ${result.opened === 'new' ? 'opened' : 'shown'} at ${result.time.selectedDate ?? result.time.cursor} (${result.time.view}) in ${result.tabId}`
+    }),
+
+    register({
       id: 'add',
       label: 'Calendar: Add an event',
       labelKey: 'auto.e16f07326a18',
@@ -320,7 +349,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
         },
         fromCli: (args) => ({ date: args[0] })
       },
-      run: async ({ date }) => ({ value: await api.workspace.patchTimeControl(selectionPatch(date)), revert: null }),
+      run: async ({ date }) => { markExplicitCalendarNavigation(); return { value: await api.workspace.patchTimeControl(selectionPatch(date)), revert: null } },
       revision: () => timeControlRevision(),
       preview: ({ date }) => selectionPatch(date),
       formatCli: (tc) => `Calendar at ${tc.selectedDate ?? tc.cursor} (${tc.view})`
@@ -341,6 +370,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
         fromCli: (args) => ({ view: (args[0] ?? '').toLowerCase() })
       },
       run: async ({ view }) => {
+        markExplicitCalendarNavigation(view)
         await api.settings.set('mainView', view)
         return { value: await api.workspace.patchTimeControl({ view }), revert: null }
       },
@@ -353,7 +383,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
       id: 'today',
       label: 'Calendar: Go to today', labelKey: 'auto.ee8581831b9c',
       sideEffect: 'write',
-      run: async () => ({ value: await api.workspace.patchTimeControl(selectionPatch(todayIso())), revert: null }),
+      run: async () => { markExplicitCalendarNavigation(); return { value: await api.workspace.patchTimeControl(selectionPatch(todayIso())), revert: null } },
       revision: () => timeControlRevision(),
       preview: () => selectionPatch(todayIso()),
       formatCli: (tc) => `Calendar at ${tc.selectedDate ?? tc.cursor} (${tc.view})`

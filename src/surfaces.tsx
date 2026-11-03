@@ -2,7 +2,7 @@ import { parseCalendarFile } from './calendarFiles'
 import { CALENDAR_ITEM_SOURCE_REVISION_V1, CALENDAR_ITEM_SOURCE_V2, METADATA_PANEL_SEGMENT_V1, provideBookmarkSurface, type MainWorkspaceNavigationController, type PluginProperty, type PluginSurfaceSnapshot, type ValleyPluginApi } from '@valley/plugin-sdk'
 import type { SlotId, TimeControlState } from '@valley/plugin-sdk/types'
 import type { PluginLinkState } from '@valley/plugin-sdk/paths'
-import { React, api } from './runtime'
+import { React, api, takeExplicitCalendarNavigation } from './runtime'
 import { calendarItemKey, type CalItem } from './items'
 import { calendarLinkPatch, calendarLinkState, calendarViewMode, defaultTimeControl, saveCalendarViewMode } from './timeControl'
 import { onChanged } from './events'
@@ -339,13 +339,15 @@ export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void
   const surfaces = ['main_workspace', 'left_sidebar', 'right_sidebar'] as const
   const offs = surfaces.map((surface) => provideBookmarkSurface(pluginApi, {
     id: `calendar.${surface}`, surface, getSnapshot: instanceId => snapshot(surface, instanceId), subscribe,
-    restore: async (raw) => {
+    restore: async (raw, _instanceId, options) => {
       const patch = calendarLinkPatch(raw)
       if (!patch) throw new Error('Unsupported Calendar bookmark.')
+      const explicit = options?.background ? takeExplicitCalendarNavigation(surface) : { time: false, view: false }
       if (raw.path !== undefined && (typeof raw.path !== 'string' || !/\.(?:ics|ifb|vcs)$/i.test(raw.path) || !await pluginApi.vault.fileInfo(raw.path))) throw new Error('The calendar file is unavailable.')
       const item = await resolveItem(raw)
       if (raw.itemId !== undefined && !item) throw new Error('The bookmarked calendar item is unavailable.')
-      if (patch.view) void saveCalendarViewMode(surface, patch.view)
+      if (patch.view && !explicit.view) void saveCalendarViewMode(surface, patch.view)
+      if (explicit.time) return
       pluginApi.workspace.patchTimeControl(patch)
       selectCalendarProperties(item, surface)
     }

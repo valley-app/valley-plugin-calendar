@@ -156,6 +156,7 @@
   "calendar.command.get": "Calendrier : Lire un élément",
   "calendar.command.listItems": "Calendrier : Lister tous les éléments",
   "calendar.command.open": "Calendrier : Ouvrir un élément",
+  "calendar.command.openDate": "Calendrier : Ouvrir la page Calendrier à une date",
   "calendar.command.closeEditor": "Calendrier : Fermer l’éditeur d’élément",
   "calendar.command.sourceAction": "Calendrier : Exécuter une action sur un élément source",
   "calendar.command.sourceActions": "Calendrier : Lister les actions des éléments sources",

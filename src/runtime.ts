@@ -111,6 +111,36 @@ interface RevealPulse {
 
 const PULSE_MS = 2400
 
+/**
+ * The host resumes a surface's saved view state the first time that surface mounts after the workspace opened. A
+ * Calendar view that mounts because of an explicit navigation (a reveal, a command, a link) must keep that newer
+ * selection instead of the resumed one, so the resume of each surface that follows within this window is skipped once.
+ */
+const EXPLICIT_NAVIGATION_MS = 15000
+const NAVIGATION_SURFACES = ['main_workspace', 'left_sidebar', 'right_sidebar'] as const
+
+function explicitNavigations(): Map<string, number> {
+  return api.runtime.getOrCreate('calendar.explicitNavigation', () => new Map<string, number>())
+}
+
+export function markExplicitCalendarNavigation(view?: 'month' | 'week' | 'year'): void {
+  const deadline = Date.now() + EXPLICIT_NAVIGATION_MS
+  const marks = explicitNavigations()
+  for (const surface of NAVIGATION_SURFACES) marks.set(surface, deadline)
+  if (view) marks.set('main_workspace:view', deadline)
+}
+
+/** True when a background resume of `surface` would replace a selection an explicit navigation made moments ago; consumes the mark. */
+export function takeExplicitCalendarNavigation(surface: string): { time: boolean; view: boolean } {
+  const marks = explicitNavigations()
+  const now = Date.now()
+  const time = (marks.get(surface) ?? 0) > now
+  const view = surface === 'main_workspace' && (marks.get('main_workspace:view') ?? 0) > now
+  marks.delete(surface)
+  if (surface === 'main_workspace') marks.delete('main_workspace:view')
+  return { time, view }
+}
+
 function publishCalendarReveal(request: {
   date: string
   startTime?: string
@@ -126,6 +156,7 @@ function publishCalendarReveal(request: {
   }))
   const reveals = revealTargetStore()
 
+  markExplicitCalendarNavigation(request.view)
   if (request.view) void api.settings.set('mainView', request.view)
   api.workspace.patchTimeControl({
     ...(request.view ? { view: request.view } : {}),

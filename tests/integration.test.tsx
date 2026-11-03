@@ -31,7 +31,7 @@ import { registerCalendarCommands } from '../src/commands'
 import { registerCalendarSurfaces } from '../src/surfaces'
 import { gridHourWindow } from '../src/WeekGrid'
 import { presetNoteDateSource } from '../src/noteDates'
-import { CalendarAgendaCard, calendarItemMenuItems, eventMenuItems, eventToItem, sourcedToItem, type CalItem } from '../src/items'
+import { CalendarAgendaCard, calendarItemMenuItems, eventMenuItems, eventToItem, openItemInCalendarMain, sourcedToItem, type CalItem } from '../src/items'
 import { Settings as CalendarSettings } from '../src/Settings'
 import CALENDAR_PLUGIN_CONFIG from '../config.json'
 import { rangeDays } from '../src/timeControl'
@@ -1473,6 +1473,28 @@ describe('Calendar item clicks', () => {
   })
 })
 
+describe('AgendaPanel virtualization', () => {
+  it('renders only the day sections near the viewport and mounts a far selected day', async () => {
+    const events = Array.from({ length: 400 }, (_, index) => {
+      const date = new Date(2026, 0, 1 + index)
+      const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      return { id: `survey-${index}`, title: `Survey ${index}`, date: day } as DataRecord
+    })
+    setupCalendarApi({ events })
+    await act(async () => { await patchTimeControl({ view: 'month', cursor: '2026-01-01', selectedDate: null, rangeStart: null, rangeEnd: null }) })
+    const { container } = render(React.createElement(AgendaPanel))
+    await waitFor(() => expect(container.querySelector('.agenda-section')).toBeTruthy())
+    const sections = (): string[] => [...container.querySelectorAll<HTMLElement>('.agenda-days > .agenda-section')].map((section) => section.dataset.visibleKey!)
+    expect(sections().length).toBeGreaterThan(0)
+    expect(sections().length).toBeLessThan(60)
+    expect(container.querySelectorAll('.agenda-card').length).toBeLessThan(60)
+    expect([...container.querySelectorAll('.agenda-days > [aria-hidden="true"]')].length).toBeGreaterThan(0)
+    await act(async () => { await patchTimeControl({ selectedDate: '2026-03-15', cursor: '2026-03-01' }) })
+    await waitFor(() => expect(sections()).toContain('2026-03-15'))
+    expect(container.querySelector('[data-visible-key="2026-03-15"] .agenda-card-title')?.textContent).toBe('Survey 73')
+  })
+})
+
 describe('AgendaPanel item clicks', () => {
   let mock: MockValleyApi
   let providerOpen: ReturnType<typeof vi.fn>
@@ -2346,6 +2368,20 @@ describe('Calendar automation and item restoration', () => {
     fireEvent.click(document.querySelector('.calendar-quickadd-cancel')!)
     await waitFor(() => expect(dialog()).toBeNull())
     expect(await run('calendar:close-editor', 'fern')).toBe(false)
+  })
+
+  it('keeps an Agenda reveal when the main Calendar it opens first resumes an older saved view', async () => {
+    const mock = setupCalendarApi({ events: [{ id: 'local', title: 'Field work', date: '2026-11-20' }] })
+    const provider = mock.api.interop.extensions.providers(PLUGIN_SURFACE_V1).find((entry) => entry.extension.surface === 'main_workspace')!.extension
+    const saved = { v: 1, view: 'month', cursor: '2027-01-01', selectedDate: '2027-01-01' }
+    await provider.restore(saved, 'calendar-1', { background: true })
+    expect(await readTimeControl()).toMatchObject({ cursor: '2027-01-01', selectedDate: '2027-01-01' })
+    openItemInCalendarMain(eventToItem(normalizeEventRecord({ id: 'local', title: 'Field work', date: '2026-11-20' })))
+    expect(mock.api.workspace.openMainTab).toHaveBeenCalled()
+    await provider.restore(saved, 'calendar-1', { background: true })
+    expect(await readTimeControl()).toMatchObject({ cursor: '2026-11-01', selectedDate: '2026-11-20' })
+    await provider.restore(saved, 'calendar-1')
+    expect(await readTimeControl()).toMatchObject({ cursor: '2027-01-01', selectedDate: '2027-01-01' })
   })
 
   it('restores item identity and leaves the current view intact when a target is missing', async () => {

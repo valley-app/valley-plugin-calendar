@@ -26,6 +26,7 @@ import { localizedMonth, localizedWeekday, parseLocalDate } from './dateMath'
 import { uiText } from './localization'
 import { QuickAdd, type QuickAddState } from './QuickAdd'
 import { editSourcedItem } from './itemSources'
+import { useVisibleRange } from './visibleRange'
 
 function sameDay(a: Date, b: Date): boolean {
   return (
@@ -34,6 +35,9 @@ function sameDay(a: Date, b: Date): boolean {
     a.getDate() === b.getDate()
   )
 }
+
+/** A day section before it is measured: header, one card row per item (or the empty line) and the gap above it. */
+const estimateDay = (count: number, first: boolean): number => (first ? 0 : 12) + 32 + Math.max(1, count) * 46
 
 function isoDay(d: Date): string {
   const y = d.getFullYear()
@@ -112,27 +116,33 @@ export function AgendaPanel(): ReactElement {
     return { days: keys, byDay: map }
   }, [search, tc.selectedDate, visibleItems])
 
+  const revealDay = React.useMemo(() => revealTarget
+    ? visibleItems.find((item) => item.id === revealTarget.itemId && (item.sourceId ?? '') === revealTarget.sourceId)?.date ?? null
+    : null, [revealTarget, visibleItems])
+  const estimate = React.useCallback((key: string, index: number) => estimateDay(byDay.get(key)?.length ?? 0, index === 0), [byDay])
+  const sections = useVisibleRange(React, { ids: days, estimate, pinned: [tc.selectedDate, revealDay] })
+  const { show } = sections
+  /** Smooth scrolling only within about a screen; a farther target jumps, because the rows between are still estimates. */
+  const scrollBehavior = React.useCallback((element: HTMLElement | undefined): ScrollBehavior => {
+    const root = bodyRef.current
+    if (!element || !root) return 'auto'
+    const box = root.getBoundingClientRect(), rect = element.getBoundingClientRect()
+    return rect.bottom > box.top - box.height && rect.top < box.bottom + box.height ? 'smooth' : 'auto'
+  }, [])
+  const showDay = React.useCallback((key: string): void => {
+    show(key, { block: 'start', behavior: scrollBehavior(sectionRefs.current.get(key)) })
+  }, [scrollBehavior, show])
+
   React.useEffect(() => {
     if (didInitialScroll.current || days.length === 0) return
     const target = days.includes(todayKey) ? todayKey : [...days].reverse().find((k) => k >= todayKey)
-    if (!target) {
-      didInitialScroll.current = true
-      return
-    }
-    const el = sectionRefs.current.get(target)
-    if (el && typeof el.scrollIntoView === 'function') {
-      el.scrollIntoView({ block: 'start' })
-      didInitialScroll.current = true
-    }
-  }, [days, todayKey])
+    didInitialScroll.current = true
+    if (target) show(target, { block: 'start' })
+  }, [days, show, todayKey])
 
   React.useEffect(() => {
-    if (!tc.selectedDate) return
-    const el = sectionRefs.current.get(tc.selectedDate)
-    if (el && typeof el.scrollIntoView === 'function') {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }, [tc.selectedDate])
+    if (tc.selectedDate) showDay(tc.selectedDate)
+  }, [showDay, tc.selectedDate])
 
   React.useEffect(() => {
     if (!revealTarget) return
@@ -142,10 +152,10 @@ export function AgendaPanel(): ReactElement {
         element.dataset.calendarItemId === revealTarget.itemId &&
         (element.dataset.calendarSourceId ?? '') === revealTarget.sourceId
       )
-      card?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      card?.scrollIntoView({ behavior: scrollBehavior(card), block: 'center' })
     })
     return () => cancelAnimationFrame(frame)
-  }, [revealTarget])
+  }, [revealDay, revealTarget, scrollBehavior])
 
   // Show the "Today" button whenever today's section scrolls out of view.
   React.useEffect(() => {
@@ -167,8 +177,7 @@ export function AgendaPanel(): ReactElement {
   }, [todayKey, days])
 
   function scrollToToday(): void {
-    const el = sectionRefs.current.get(todayKey)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (days.includes(todayKey)) showDay(todayKey)
   }
 
   const openItemMenu = async (item: CalItem, e: React.MouseEvent): Promise<void> => {
@@ -238,7 +247,8 @@ export function AgendaPanel(): ReactElement {
         {days.length === 0 ? (
           <div className="tree-empty">{uiText('auto.418713defbf7')}</div>
         ) : (
-          days.map((key, i) => {
+          <div className="agenda-days" ref={sections.ref}>{sections.render((i) => {
+            const key = days[i]
             const date = parseLocalDate(key)
             const list = byDay.get(key) ?? []
             const isToday = sameDay(date, today)
@@ -249,7 +259,8 @@ export function AgendaPanel(): ReactElement {
             return (
               <div
                 key={key}
-                className="agenda-section"
+                data-visible-key={key}
+                className={`agenda-section${i > 0 ? ' agenda-section-spaced' : ''}`}
                 ref={(el) => {
                   if (el) sectionRefs.current.set(key, el)
                   else sectionRefs.current.delete(key)
@@ -287,7 +298,7 @@ export function AgendaPanel(): ReactElement {
                 )}
               </div>
             )
-          })
+          })}</div>
         )}
       </div>
       {quickAdd && <QuickAdd

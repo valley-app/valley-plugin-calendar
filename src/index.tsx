@@ -21,7 +21,7 @@ import {
   type ValleyPluginApi,
   type ValleyPluginModule
 } from '@valley/plugin-sdk'
-import { initRuntime, revealCalendarItem, revealTargetStore } from './runtime'
+import { initRuntime, markExplicitCalendarNavigation, revealCalendarItem, revealTargetStore } from './runtime'
 import { injectStyles } from './styles'
 import { registerCalendarCommands } from './commands'
 import { registerCalendarFence } from './fence'
@@ -58,7 +58,9 @@ export function register(api: ValleyPluginApi): () => Promise<void> {
   })
   const offLinks = api.workspace.onOpenOwnLink((state) => {
     const patch = calendarLinkPatch(state)
-    if (patch) api.workspace.patchTimeControl(patch)
+    if (!patch) return
+    markExplicitCalendarNavigation(patch.view)
+    api.workspace.patchTimeControl(patch)
   })
 
   api.registerView('calendar.file', CalendarFileView)
