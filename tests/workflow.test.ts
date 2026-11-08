@@ -15,7 +15,7 @@ function setup() {
   const emit = vi.fn(async (_service: string, _event: string, _payload: unknown) => {})
   const scopedEmit = vi.fn(async (_service: string, _event: string, _payload: unknown) => {})
   const report = vi.fn()
-  const api = { index: mock.api.index, vault: mock.api.vault, notifications: { ...mock.api.notifications, onOccurrence: () => () => {} }, lifecycle: { onResume: () => () => {} }, i18n: { t: mock.api.ui.t, language: () => 'en', onLanguageChanged: () => () => {} }, pluginId: 'calendar', data: mock.api.data, documents: mock.api.documents, settings: mock.api.settings, services: { emit }, rpc: {
+  const api = { index: mock.api.index, realm: mock.api.realm, notifications: { ...mock.api.notifications, onOccurrence: () => () => {} }, lifecycle: { onResume: () => () => {} }, i18n: { t: mock.api.ui.t, language: () => 'en', onLanguageChanged: () => () => {} }, pluginId: 'calendar', data: mock.api.data, documents: mock.api.documents, settings: mock.api.settings, services: { emit }, rpc: {
     emit: report,
     handle: (method: string, handler: (input: unknown) => unknown) => { handlers.set(method, handler); return () => { handlers.delete(method) } },
     handleOperation: (method: string, handler: (input: unknown, context: PluginBackendOperationContext) => unknown) => { handlers.set(method, async (input, context) => assertCommandOutput(method, input, await handler(input, context!))); return () => { handlers.delete(method) } }

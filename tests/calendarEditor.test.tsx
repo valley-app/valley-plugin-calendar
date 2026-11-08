@@ -3,7 +3,7 @@ import * as React from 'react'
 import { createRoot } from 'react-dom/client'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MountedPluginView, PluginEditorProvider, PluginVaultApi } from '@valley/plugin-sdk'
+import type { MountedPluginView, PluginEditorProvider, PluginRealmApi } from '@valley/plugin-sdk'
 import type { FileBaseline, GuardedWriteResult } from '@valley/plugin-sdk/types'
 import { createMockValleyApi } from './harness'
 import { CalendarFileEditor, useCalendarFileEditor } from '../src/calendarEditor'
@@ -40,9 +40,9 @@ function setup() {
   let disk = raw
   const providers = new Map<string, PluginEditorProvider>()
   const mutations = vi.fn()
-  const changed = new Set<Parameters<typeof mock.api.vault.onChanged>[0]>()
-  vi.spyOn(mock.api.vault, 'readFileBaseline').mockImplementation(async () => ({ content: disk, baseline }))
-  vi.spyOn(mock.api.vault, 'onChanged').mockImplementation(listener => { changed.add(listener); return () => { changed.delete(listener) } })
+  const changed = new Set<Parameters<typeof mock.api.realm.onChanged>[0]>()
+  vi.spyOn(mock.api.realm, 'readFileBaseline').mockImplementation(async () => ({ content: disk, baseline }))
+  vi.spyOn(mock.api.realm, 'onChanged').mockImplementation(listener => { changed.add(listener); return () => { changed.delete(listener) } })
   const save = async (owner: string, content: string, expected: FileBaseline | null, revision: string): Promise<GuardedWriteResult> => {
     const leases: Awaited<ReturnType<PluginEditorProvider['prepare']>>[] = []
     try {
@@ -59,13 +59,13 @@ function setup() {
     } catch { return { ok: false, reason: 'error' } }
     finally { for (const lease of leases.reverse()) await lease.release() }
   }
-  const editors: PluginVaultApi['editors'] = {
+  const editors: PluginRealmApi['editors'] = {
     register: vi.fn((view, provider) => { providers.set(view.mountId, provider); return () => { providers.delete(view.mountId) } }),
     registerDocument: vi.fn((_path, instance, provider) => { providers.set(instance, provider); return () => { providers.delete(instance) } }),
     save: vi.fn((view, content, expected, revision) => save(view.mountId, content, expected, revision)),
     saveDocument: vi.fn((_path, instance, content, expected, revision) => save(instance, content, expected, revision))
   }
-  Object.assign(mock.api.vault, { editors })
+  Object.assign(mock.api.realm, { editors })
   disposals.push(initRuntime({ ...mock.api, React }))
   return { mock, editors, mutations, providers, disk: () => disk, changeDisk: (content: string) => {
     disk = content
@@ -76,8 +76,8 @@ function setup() {
 describe('Calendar file draft fencing', () => {
   it('registers before loading and refuses unreadable state', async () => {
     const fixture = setup()
-    let complete!: (value: Awaited<ReturnType<typeof fixture.mock.api.vault.readFileBaseline>>) => void
-    vi.mocked(fixture.mock.api.vault.readFileBaseline).mockImplementation(() => new Promise(resolve => { complete = resolve }))
+    let complete!: (value: Awaited<ReturnType<typeof fixture.mock.api.realm.readFileBaseline>>) => void
+    vi.mocked(fixture.mock.api.realm.readFileBaseline).mockImplementation(() => new Promise(resolve => { complete = resolve }))
     const editor = new CalendarFileEditor(path, mountedView)
     disposals.push(editor.start())
     expect(fixture.editors.register).toHaveBeenCalledWith(mountedView, editor.provider)
@@ -157,8 +157,8 @@ describe('Calendar file draft fencing', () => {
     expect(owner.getSnapshot()).toMatchObject({ dirty: true, readiness: 'uncertain' })
     expect(owner.change()).toBe(false)
     expect(() => owner.attachDraft()).toThrow()
-    let complete!: (value: Awaited<ReturnType<typeof fixture.mock.api.vault.readFileBaseline>>) => void
-    vi.mocked(fixture.mock.api.vault.readFileBaseline).mockImplementation(() => new Promise(resolve => { complete = resolve }))
+    let complete!: (value: Awaited<ReturnType<typeof fixture.mock.api.realm.readFileBaseline>>) => void
+    vi.mocked(fixture.mock.api.realm.readFileBaseline).mockImplementation(() => new Promise(resolve => { complete = resolve }))
     const loading = new CalendarFileEditor(path, mountedView)
     const stop = loading.start()
     stop()
@@ -239,13 +239,13 @@ describe('Calendar file draft fencing', () => {
     owner.change()
     const content = raw.replace('Canopy survey', 'Bäume')
     await owner.save(content, owner.getSnapshot().revision)
-    expect(await mock.api.vault.readFile(path)).toBe(content)
+    expect(await mock.api.realm.readFile(path)).toBe(content)
     await waitFor(() => expect(other.getSnapshot().readiness).toBe('ready'))
     owner.change()
     other.change()
     await expect(owner.save('blocked', owner.getSnapshot().revision)).rejects.toMatchObject({ code: 'DIRTY_EDITOR' })
-    await expect(mock.api.vault.writeFileGuarded(path, 'blocked', owner.baseline!.baseline)).rejects.toMatchObject({ code: 'DIRTY_EDITOR' })
-    expect(await mock.api.vault.readFile(path)).toBe(content)
+    await expect(mock.api.realm.writeFileGuarded(path, 'blocked', owner.baseline!.baseline)).rejects.toMatchObject({ code: 'DIRTY_EDITOR' })
+    expect(await mock.api.realm.readFile(path)).toBe(content)
     expect(other.getSnapshot().dirty).toBe(true)
   })
 

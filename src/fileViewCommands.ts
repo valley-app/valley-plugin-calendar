@@ -36,7 +36,7 @@ export interface CalendarFileFormState {
   title: string; date: string; endDate: string; start: string; end: string; allDay: boolean; location: EventLocation | null; tags: string[]; note: string; urls: string[]; attachments: string[]; filePath: string; details: boolean; recurrenceScope: 'occurrence' | 'series'; busy: boolean; frozen: boolean; readOnly: boolean; isNew: boolean
 }
 export interface CalendarFileActionContext { validate(targets?: CommandFileTarget[]): Promise<void>; targets: readonly CommandFileTarget[] }
-/** `targets` declares the extra vault files an action reads or writes besides the mounted file; the command's fileTargets resolver publishes them, so `validate()` re-checks exactly the declared set. */
+/** `targets` declares the extra realm files an action reads or writes besides the mounted file; the command's fileTargets resolver publishes them, so `validate()` re-checks exactly the declared set. */
 export interface CalendarFileController { snapshot(): CalendarFileViewState | CalendarFileFormState; actions: Partial<Record<CalendarFileAction['type'], (action: CalendarFileAction, context: CalendarFileActionContext) => void | Promise<unknown>>>; targets?: Partial<Record<CalendarFileAction['type'], (action: CalendarFileAction) => CommandFileTarget[] | Promise<CommandFileTarget[]>>> }
 interface Entry { target: MountedPluginView; controllers: Map<'view' | 'form', { token: symbol; current: CalendarFileController }>; revision: string; signature: string; pending: boolean }
 const runtimeState = (ownerApi = api) => ownerApi.runtime.getOrCreate('calendar.fileActions', () => ({ owners: new Map<string, Entry>(), id: crypto.randomUUID(), sequence: 0 }))

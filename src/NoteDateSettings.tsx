@@ -194,7 +194,7 @@ const GlyphPicker: FC<{
 
 /**
  * What this rule currently finds. A mistyped key, value or date property is
- * otherwise indistinguishable from an empty vault — nothing appears anywhere and
+ * otherwise indistinguishable from an empty realm — nothing appears anywhere and
  * nothing says why. Silent on an unfinished rule.
  */
 const MatchStats: FC<{ source: NoteDateSource; entries: NoteDateIndexEntry[] }> = ({ source, entries }) => {
@@ -234,7 +234,7 @@ const SourceRow: FC<{
   handle?: ReactNode
   initiallyExpanded?: boolean
 }> = ({ source, entries, onChange, onDelete, handle, initiallyExpanded = false }) => {
-  const { VaultFolderField, SelectField, Toggle } = api.ui.settings
+  const { RealmFolderField, SelectField, Toggle } = api.ui.settings
   const [expanded, setExpanded] = React.useState(initiallyExpanded)
   const [advanced, setAdvanced] = React.useState(false)
   const advancedId = React.useId()
@@ -468,7 +468,7 @@ const SourceRow: FC<{
         <div className="notedate-source-grid notedate-source-advanced-body" id={advancedId}>
           {field(
             uiText('auto.0623bfa38c8f'),
-            <VaultFolderField
+            <RealmFolderField
               value={source.folder ?? ''}
               onChange={(v) => onChange({ folder: v.trim() || undefined })}
               onCommit={(v) => onChange({ folder: v.trim() || undefined })}

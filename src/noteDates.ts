@@ -36,7 +36,7 @@ export interface NoteDateSource {
   matchKey: string
   /** Value matchKey must equal, case-insensitive. */
   matchValue: string
-  /** Optional vault-relative folder scope. */
+  /** Optional realm-relative folder scope. */
   folder?: string
   /** Frontmatter key holding the date (`YYYY-MM-DD`, `--MM-DD`, …). */
   dateField: string
@@ -291,7 +291,7 @@ export function matchNotes(entries: readonly NoteDateIndexEntry[], source: NoteD
   return out
 }
 
-/** What a rule currently finds in the vault — the settings row's feedback line. */
+/** What a rule currently finds in the realm — the settings row's feedback line. */
 export interface SourceMatchStats {
   /** Notes whose frontmatter satisfies the predicate. */
   matched: number

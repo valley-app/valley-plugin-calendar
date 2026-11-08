@@ -7,7 +7,7 @@ import type { CalItem } from './items'
 function documentReads() {
   return readOwner('calendarDocuments', owner => {
     const cache = new Map<string, Promise<ReturnType<typeof parseCalendarFile>>>()
-    const off = owner.vault.onChanged(info => {
+    const off = owner.realm.onChanged(info => {
       if (info.full) cache.clear()
       else for (const key of cache.keys()) if (info.changes.some(change => JSON.parse(key)[0] === change.relPath)) cache.delete(key)
     })
@@ -16,7 +16,7 @@ function documentReads() {
         const key = JSON.stringify([path, start, end, revision])
         let value = cache.get(key)
         if (!value) {
-          value = owner.vault.readFile(path).then(raw => parseCalendarFile(raw, path, start, end))
+          value = owner.realm.readFile(path).then(raw => parseCalendarFile(raw, path, start, end))
           cache.set(key, value)
           void value.catch(() => { cache.delete(key) })
           if (cache.size > 128) cache.delete(cache.keys().next().value!)
@@ -63,7 +63,7 @@ export function useCalendarDocuments(start: string, end: string, onlyPath?: stri
     }
     const reload = (): void => { void refresh() }
     const offCalendar = calendarIndex.subscribe(reload), offDaily = dailyIndex.subscribe(reload)
-    const offFiles = api.vault.onChanged(info => {
+    const offFiles = api.realm.onChanged(info => {
       if (info.full || info.changes.some(change => change.relPath === onlyPath || change.relPath.startsWith(`${calendarRoot}/`) || change.relPath.startsWith(`${dailyRoot}/`))) reload()
     })
     reload()

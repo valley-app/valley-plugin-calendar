@@ -200,7 +200,7 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
   })
   const [location, setLocation] = useEventField<EventLocation | undefined>(draftKey, 'location', editing?.location)
   const [note, setNote] = useEventField(draftKey, 'note', editing?.note ?? '')
-  // Everything hanging off an event — a vault file, a web address, the note it
+  // Everything hanging off an event — a realm file, a web address, the note it
   // links. One block, the way the row reads them.
   const [urls, setUrls] = useEventField<string[]>(draftKey, 'urls', editing?.urls ?? editing?.event?.urls ?? editing?.sourced?.urls ?? [])
   const [attachments, setAttachments] = useEventField<string[]>(draftKey, 'attachments', editing?.attachments ?? editing?.event?.attachments ?? editing?.sourced?.attachments ?? [])
@@ -256,7 +256,7 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
     void api.documents.read(documentRef).then(document => {
       if (!active || closing.current) return
       if (!document) { setError(uiText('calendar.error.missing')); return }
-      setDocumentRevision(current => current ?? { expectedRevision: document.revision, vaultGeneration: document.vaultGeneration })
+      setDocumentRevision(current => current ?? { expectedRevision: document.revision, realmGeneration: document.realmGeneration })
     }, () => { if (active) setError(uiText('calendar.error.save')) })
     return () => { active = false }
   }, [editing?.id, editing?.kind, editing?.readOnly, documentRevision])
@@ -400,7 +400,7 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
       },
       'url-add': action => { if (action.type === 'url-add') { refuseForm(); if (!normalizeEventUrl(action.value)) throw Object.assign(new Error('The Calendar URL is invalid.'), { outcome: 'not-applied' }); addUrl(action.value) } },
       'url-remove': action => { if (action.type === 'url-remove') { refuseForm(); if (!urls.includes(action.value)) throw Object.assign(new Error('This exact Calendar URL is missing.'), { outcome: 'not-applied' }); setUrls(urls.filter(value => value !== action.value)) } },
-      'attachment-add': action => { if (action.type === 'attachment-add') { refuseForm(); if (!action.value || action.value.startsWith('/') || action.value.split('/').some(part => part === '..')) throw Object.assign(new Error('Expected a vault-relative attachment path.'), { outcome: 'not-applied' }); if (!attachments.includes(action.value)) setAttachments([...attachments, action.value]) } },
+      'attachment-add': action => { if (action.type === 'attachment-add') { refuseForm(); if (!action.value || action.value.startsWith('/') || action.value.split('/').some(part => part === '..')) throw Object.assign(new Error('Expected a realm-relative attachment path.'), { outcome: 'not-applied' }); if (!attachments.includes(action.value)) setAttachments([...attachments, action.value]) } },
       'attachment-remove': action => { if (action.type === 'attachment-remove') { refuseForm(); if (!attachments.includes(action.value)) throw Object.assign(new Error('This exact Calendar attachment is missing.'), { outcome: 'not-applied' }); setAttachments(attachments.filter(value => value !== action.value)) } },
       'url-open': async (action, context) => { if (action.type === 'url-open') { refuseForm(); if (!urls.includes(action.value)) throw Object.assign(new Error('This exact Calendar URL is missing.'), { outcome: 'not-applied' }); const path = parseAppOpenUrl(action.value); await context.validate(); if (path) await api.workspace.openFile(path); else await api.files.openExternalUrl(action.value) } },
       'attachment-open': async (action, context) => { if (action.type === 'attachment-open') { refuseForm(); if (!attachments.includes(action.value)) throw Object.assign(new Error('This exact Calendar attachment is missing.'), { outcome: 'not-applied' }); await context.validate(); await api.workspace.openFile(action.value) } },
@@ -547,7 +547,7 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
             )}
           </div>
 
-          {/* One block for everything else hanging off the item — a vault file
+          {/* One block for everything else hanging off the item — a realm file
               and a web address are the same thing to the person reading the
               chip, so the links sit with the files. */}
           <Section title={uiText('calendar.attachments')}>

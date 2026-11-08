@@ -62,7 +62,7 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
     const from = new Date(now - 7 * 86400000).toISOString().slice(0, 10)
     const to = new Date(now + 90 * 86400000).toISOString().slice(0, 10)
     for (const file of indexed.entries.filter(file => !file.excluded)) {
-      const content = await api.vault.read(file.relPath)
+      const content = await api.realm.read(file.relPath)
       if (!content) continue
       for (const event of parseCalendarFile(content.content, file.relPath, from, to).entries) {
         for (const alarm of event.alarmTimes ?? []) {
@@ -83,7 +83,7 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
     await save()
   })
   const offFiles = files.subscribe(reconcile)
-  const offVault = api.vault.onChanged(reconcile)
+  const offRealm = api.realm.onChanged(reconcile)
   const offData = api.data.dataset('calendar.events').subscribe(reconcile)
   const offSettings = api.settings.subscribe(reconcile)
   const offResume = api.lifecycle.onResume(reconcile)
@@ -100,5 +100,5 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
   })
   const interval = setInterval(reconcile, 60_000)
   reconcile()
-  return async () => { active = false; clearInterval(interval); offFiles(); offVault(); await files.dispose(); offData(); offSettings(); offResume(); offOccurrence(); offAction(); await pending }
+  return async () => { active = false; clearInterval(interval); offFiles(); offRealm(); await files.dispose(); offData(); offSettings(); offResume(); offOccurrence(); offAction(); await pending }
 }

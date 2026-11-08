@@ -78,7 +78,7 @@ describe('exact Calendar file action owners', () => {
     await fixture.invoke({ type: 'select-item', key }); expect((await fixture.inspect()).view.selectedItemKey).toBe(key)
     await fixture.invoke({ type: 'today' }); expect(fixture.mock.timeControl().selectedDate).toMatch(/^2026-/)
     await expect(fixture.invoke({ type: 'next' }, 'control', {}, target, original.revision)).rejects.toMatchObject({ code: 'REVISION_CONFLICT', outcome: 'not-applied' })
-    expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
+    expect(await fixture.mock.api.realm.readFile(path)).toBe(raw)
     rendered.unmount(); await expect(fixture.inspect()).rejects.toMatchObject({ code: 'TARGET_REPLACED' })
   })
 
@@ -96,14 +96,14 @@ describe('exact Calendar file action owners', () => {
     expect(await fixture.invokeDeclared({ type: 'url-open', value: 'https://example.com/survey' })).toEqual([{ kind: 'file', path, fileOperation: 'read' }]); expect(fixture.mock.externalUrls).toEqual(['https://example.com/survey'])
     expect(await fixture.invokeDeclared({ type: 'attachment-open', value: 'assets/map.pdf' })).toEqual(expect.arrayContaining([{ kind: 'file', path, fileOperation: 'read' }, { kind: 'file', path: 'assets/map.pdf', fileOperation: 'read' }])); expect(open).toHaveBeenCalledWith('assets/map.pdf')
     await fixture.invoke({ type: 'url-remove', value: 'https://example.com/survey' }); await fixture.invoke({ type: 'attachment-remove', value: 'assets/map.pdf' }); expect((await fixture.inspect()).form).toMatchObject({ urls: [], attachments: [] })
-    await fixture.invoke({ type: 'cancel' }, 'execute'); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull()); expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
+    await fixture.invoke({ type: 'cancel' }, 'execute'); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull()); expect(await fixture.mock.api.realm.readFile(path)).toBe(raw)
     await fixture.invoke({ type: 'open-editor', date: '2026-09-30' }, 'execute'); await screen.findByRole('dialog')
     await fixture.invoke({ type: 'form-patch', patch: { title: 'New canopy survey', note: 'Retained note' } })
-    const save = vi.spyOn(fixture.mock.api.vault.editors, 'save')
+    const save = vi.spyOn(fixture.mock.api.realm.editors, 'save')
     await fixture.invoke({ type: 'save' }, 'save'); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await act(async () => fixture.mock.emitVaultChanged({ full: false, changes: [{ relPath: path, kind: 'change' }] }))
+    await act(async () => fixture.mock.emitRealmChanged({ full: false, changes: [{ relPath: path, kind: 'change' }] }))
     expect(save).toHaveBeenCalledWith(mountedView, expect.stringContaining('SUMMARY:New canopy survey'), expect.any(Object), expect.any(String))
-    expect(await fixture.mock.api.vault.readFile(path)).toContain('UID:forest'); expect(await fixture.mock.api.vault.readFile(path)).toContain('X-CUSTOM:preserve'); expect(await fixture.mock.api.vault.readFile(path)).toContain('SUMMARY:New canopy survey')
+    expect(await fixture.mock.api.realm.readFile(path)).toContain('UID:forest'); expect(await fixture.mock.api.realm.readFile(path)).toContain('X-CUSTOM:preserve'); expect(await fixture.mock.api.realm.readFile(path)).toContain('SUMMARY:New canopy survey')
   })
 
   it('opens a recurring occurrence, retains its scope, saves existing data and deletes the exact file entry', async () => {
@@ -112,11 +112,11 @@ describe('exact Calendar file action owners', () => {
     await fixture.invoke({ type: 'edit-item', key }, 'execute'); await screen.findByRole('dialog')
     await fixture.invoke({ type: 'form-patch', patch: { title: 'Series renamed', recurrenceScope: 'series' } }); expect((await fixture.inspect()).form?.recurrenceScope).toBe('series')
     await fixture.invoke({ type: 'save' }, 'save'); await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    await act(async () => fixture.mock.emitVaultChanged({ full: false, changes: [{ relPath: path, kind: 'change' }] }))
+    await act(async () => fixture.mock.emitRealmChanged({ full: false, changes: [{ relPath: path, kind: 'change' }] }))
     await waitFor(async () => expect((await fixture.inspect()).view.items[0].title).toBe('Series renamed'))
-    expect(await fixture.mock.api.vault.readFile(path)).toContain('RRULE:FREQ=DAILY;COUNT=3'); expect(await fixture.mock.api.vault.readFile(path)).toContain('X-CUSTOM:preserve')
+    expect(await fixture.mock.api.realm.readFile(path)).toContain('RRULE:FREQ=DAILY;COUNT=3'); expect(await fixture.mock.api.realm.readFile(path)).toContain('X-CUSTOM:preserve')
     await fixture.invoke({ type: 'delete-item', key: (await fixture.inspect()).view.items[0].key }, 'save')
-    const saved = await fixture.mock.api.vault.readFile(path)
+    const saved = await fixture.mock.api.realm.readFile(path)
     expect(saved).toContain('EXDATE'); expect(saved).toContain('UID:forest'); expect(parseCalendarFile(saved, path, '2026-09-01', '2026-10-31').entries.map(entry => entry.date)).not.toContain('2026-09-28')
   })
 
@@ -125,20 +125,20 @@ describe('exact Calendar file action owners', () => {
     const open = vi.spyOn(fixture.mock.api.workspace, 'openFile')
     const note = 'plugins/calendar/dailynotes/2026-09-28.md'
     expect(await fixture.invokeDeclared({ type: 'open-daily-note', date: '2026-09-28' })).toEqual(expect.arrayContaining([{ kind: 'file', path: note, fileOperation: 'write' }]))
-    expect(await fixture.mock.api.vault.readFile(note)).toBe('# 2026-09-28\n\n'); expect(open).toHaveBeenCalledWith(note)
-    expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
+    expect(await fixture.mock.api.realm.readFile(note)).toBe('# 2026-09-28\n\n'); expect(open).toHaveBeenCalledWith(note)
+    expect(await fixture.mock.api.realm.readFile(path)).toBe(raw)
   })
 
   it('declares an existing daily note as a read target and never creates it under that read authorization', async () => {
     const fixture = setup(); render(<Calendar filePath={path} mountedView={mountedView} />); await fixture.ready()
-    const open = vi.spyOn(fixture.mock.api.workspace, 'openFile'), create = vi.spyOn(fixture.mock.api.vault, 'createTextDocumentGuarded'), note = 'plugins/calendar/dailynotes/2026-09-28.md'
-    expect((await fixture.mock.api.vault.createTextDocumentGuarded(note, '# Existing\n')).ok).toBe(true); create.mockClear()
+    const open = vi.spyOn(fixture.mock.api.workspace, 'openFile'), create = vi.spyOn(fixture.mock.api.realm, 'createTextDocumentGuarded'), note = 'plugins/calendar/dailynotes/2026-09-28.md'
+    expect((await fixture.mock.api.realm.createTextDocumentGuarded(note, '# Existing\n')).ok).toBe(true); create.mockClear()
     const declared = await fixture.invokeDeclared({ type: 'open-daily-note', date: '2026-09-28' })
     expect(declared).toEqual(expect.arrayContaining([{ kind: 'file', path: note, fileOperation: 'read' }])); expect(declared.some(target => target.fileOperation === 'write')).toBe(false)
-    expect(await fixture.mock.api.vault.readFile(note)).toBe('# Existing\n'); expect(open).toHaveBeenCalledWith(note); expect(create).not.toHaveBeenCalled()
+    expect(await fixture.mock.api.realm.readFile(note)).toBe('# Existing\n'); expect(open).toHaveBeenCalledWith(note); expect(create).not.toHaveBeenCalled()
     open.mockClear(); let vanished = false
-    const stat = fixture.mock.api.vault.stat.bind(fixture.mock.api.vault)
-    vi.spyOn(fixture.mock.api.vault, 'stat').mockImplementation(async relPath => vanished && relPath === note ? null : await stat(relPath))
+    const stat = fixture.mock.api.realm.stat.bind(fixture.mock.api.realm)
+    vi.spyOn(fixture.mock.api.realm, 'stat').mockImplementation(async relPath => vanished && relPath === note ? null : await stat(relPath))
     await expect(fixture.invoke({ type: 'open-daily-note', date: '2026-09-28' }, 'execute', { validateBeforeRun: async () => { vanished = true; return true } })).rejects.toMatchObject({ outcome: 'not-applied' })
     expect(create).not.toHaveBeenCalled(); expect(open).not.toHaveBeenCalled()
   })
@@ -151,7 +151,7 @@ describe('exact Calendar file action owners', () => {
     await expect(fixture.invoke({ type: 'url-open', value: 'https://example.com/survey' }, 'execute')).rejects.toMatchObject({ code: 'EFFECT_UNVERIFIED', outcome: 'unknown', details: { cause: { code: 'LINK_REFUSED', message: 'Link broker refused' } } })
     opener.mockImplementationOnce(async () => { rendered.unmount(); return true })
     expect(await fixture.invoke({ type: 'url-open', value: 'https://example.com/survey' }, 'execute')).toMatchObject({ status: 'queued', action: 'url-open' })
-    expect(opener).toHaveBeenLastCalledWith('https://example.com/survey'); expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
+    expect(opener).toHaveBeenLastCalledWith('https://example.com/survey'); expect(await fixture.mock.api.realm.readFile(path)).toBe(raw)
   })
 
   it('refuses denied/stale/replaced effects and retains post-dispatch uncertainty without replay', async () => {
@@ -159,7 +159,7 @@ describe('exact Calendar file action owners', () => {
     await expect(fixture.invoke({ type: 'open-editor', date: '2026-09-28' }, 'execute', { validateBeforeRun: async () => false })).rejects.toMatchObject({ code: 'PERMISSION_DENIED', outcome: 'not-applied' }); expect(screen.queryByRole('dialog')).toBeNull()
     await fixture.invoke({ type: 'open-editor', date: '2026-09-28' }, 'execute'); await screen.findByRole('dialog')
     const old = await fixture.inspect(); fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Native pending draft' } })
-    await expect(fixture.invoke({ type: 'save' }, 'save', {}, target, old.revision)).rejects.toMatchObject({ code: 'REVISION_CONFLICT' }); expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
+    await expect(fixture.invoke({ type: 'save' }, 'save', {}, target, old.revision)).rejects.toMatchObject({ code: 'REVISION_CONFLICT' }); expect(await fixture.mock.api.realm.readFile(path)).toBe(raw)
     await fixture.invoke({ type: 'url-add', value: 'https://example.com/survey' })
     vi.spyOn(fixture.mock.api.files, 'openExternalUrl').mockRejectedValueOnce(new Error('Lost acknowledgement'))
     await expect(fixture.invoke({ type: 'url-open', value: 'https://example.com/survey' }, 'execute')).rejects.toMatchObject({ code: 'EFFECT_UNVERIFIED', outcome: 'unknown', retryable: false })
@@ -169,7 +169,7 @@ describe('exact Calendar file action owners', () => {
     await waitFor(() => expect(resume).toBeTypeOf('function'))
     const refused = expect(action).rejects.toMatchObject({ code: 'TARGET_REPLACED', outcome: 'not-applied' })
     rendered.unmount(); await act(async () => resume(true)); await refused
-    expect(await fixture.mock.api.vault.readFile(path)).toBe(raw)
+    expect(await fixture.mock.api.realm.readFile(path)).toBe(raw)
   })
 
   it('validates complete schemas, exact identities, routes and field bounds before dispatch', async () => {

@@ -204,7 +204,7 @@ async function resolveItem(raw: PluginLinkState): Promise<CalItem | null> {
   if (raw.kind === 'event' || raw.kind === 'sourced') {
     return resolveCalendarTarget({ id: raw.itemId, sourceId: raw.kind === 'sourced' && typeof raw.sourceId === 'string' ? raw.sourceId : undefined })
   } else if (raw.kind === 'file' && typeof raw.filePath === 'string') {
-    const parsed = parseCalendarFile(await api.vault.readFile(raw.filePath), raw.filePath, String(raw.date), String(raw.date))
+    const parsed = parseCalendarFile(await api.realm.readFile(raw.filePath), raw.filePath, String(raw.date), String(raw.date))
     const file = parsed.entries.find(entry => entry.id === raw.itemId)
     return file ? { kind: 'file', ...file, filePath: file.path, file, readOnly: false } : null
   } else if (raw.kind === 'noteDate' && typeof raw.filePath === 'string' && await api.documents.resolve(raw.filePath)) {
@@ -291,7 +291,7 @@ function Overview({ view, sources = false }: { view?: PluginLinkState; sources?:
       update()
       void contextProperties().then((fields) => { if (current === generation) { setDetails(fields); setError(false) } }).catch(() => { if (current === generation) setError(true) })
     }
-    const offs = [subscribe(update), subscribeHostField('vault', refresh), api.settings.subscribe(refresh), api.data.dataset('calendar.calendars').subscribe(refresh), api.interop.services.subscribe(CALENDAR_ITEM_SOURCE_V2, refresh)]
+    const offs = [subscribe(update), subscribeHostField('realm', refresh), api.settings.subscribe(refresh), api.data.dataset('calendar.calendars').subscribe(refresh), api.interop.services.subscribe(CALENDAR_ITEM_SOURCE_V2, refresh)]
     refresh()
     return () => { generation++; offs.forEach((off) => off()) }
   }, [sources])
@@ -321,7 +321,7 @@ function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkS
       void resolveItem(item).then((value) => { if (!disposed) { setSelected(value); setError('') } }).catch((reason) => { if (!disposed) { setSelected(null); setError(reason instanceof Error ? reason.message : String(reason)) } })
     }
     refresh()
-    const offs = [onChanged(refresh), api.interop.state.subscribe(CALENDAR_ITEM_SOURCE_REVISION_V1, refresh), api.vault.onChanged(info => {
+    const offs = [onChanged(refresh), api.interop.state.subscribe(CALENDAR_ITEM_SOURCE_REVISION_V1, refresh), api.realm.onChanged(info => {
       if (info.full || info.changes.some(change => change.relPath === item?.filePath)) refresh()
     })]
     return () => { disposed = true; offs.forEach(off => off()) }
@@ -343,7 +343,7 @@ export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void
       const patch = calendarLinkPatch(raw)
       if (!patch) throw new Error('Unsupported Calendar bookmark.')
       const explicit = options?.background ? takeExplicitCalendarNavigation(surface) : { time: false, view: false }
-      if (raw.path !== undefined && (typeof raw.path !== 'string' || !/\.(?:ics|ifb|vcs)$/i.test(raw.path) || !await pluginApi.vault.fileInfo(raw.path))) throw new Error('The calendar file is unavailable.')
+      if (raw.path !== undefined && (typeof raw.path !== 'string' || !/\.(?:ics|ifb|vcs)$/i.test(raw.path) || !await pluginApi.realm.fileInfo(raw.path))) throw new Error('The calendar file is unavailable.')
       const item = await resolveItem(raw)
       if (raw.itemId !== undefined && !item) throw new Error('The bookmarked calendar item is unavailable.')
       if (patch.view && !explicit.view) void saveCalendarViewMode(surface, patch.view)

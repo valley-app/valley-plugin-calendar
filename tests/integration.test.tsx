@@ -243,7 +243,7 @@ describe('shared Calendar documents', () => {
     expect(update).not.toHaveBeenCalled()
     expect(mock.datasets.get('calendar.events')?.[0].note).toBe('**Draft**')
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save' })) })
-    expect(update).toHaveBeenCalledWith({ pluginId: 'calendar', sourceId: 'events', itemId: event.id }, expect.objectContaining({ body: '**Changed** [[Ferns]] #wald', explicitTags: expect.arrayContaining(['flora', 'äste/jung']), expectedRevision: expect.any(Number), vaultGeneration: expect.any(Number) }))
+    expect(update).toHaveBeenCalledWith({ pluginId: 'calendar', sourceId: 'events', itemId: event.id }, expect.objectContaining({ body: '**Changed** [[Ferns]] #wald', explicitTags: expect.arrayContaining(['flora', 'äste/jung']), expectedRevision: expect.any(Number), realmGeneration: expect.any(Number) }))
     expect(clear).toHaveBeenCalledWith({ pluginId: 'calendar', sourceId: 'events', itemId: event.id })
     expect(close).toHaveBeenCalledTimes(1)
   })
@@ -2119,7 +2119,7 @@ describe('Note dates settings section', () => {
     expect(stats.textContent).toBe('2 notes match · 1 with a usable date')
     expect(stats).not.toHaveClass('warn')
 
-    // The exact live-vault failure: a plural value nothing in the vault uses.
+    // The exact live-realm failure: a plural value nothing in the realm uses.
     cleanup()
     setupRule({ matchValue: 'animals' })
     const missed = render(React.createElement(CalendarSettings, { section: 'dates' }))

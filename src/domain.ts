@@ -3,7 +3,7 @@ import type { DataRecord, EventRecord } from '@valley/plugin-sdk/types'
 import { eventRelations, eventRow, forWrite, isRemoteEventId, normalizeEventRecord, readEvents, relationWrites } from './records'
 
 type OwnerApi = Pick<ValleyPluginApi, 'data' | 'pluginId'> & { settings?: Pick<ValleyPluginApi['settings'], 'get'> } & { documents: Pick<ValleyPluginApi['documents'], 'read' | 'update'> }
-type Revision = { expectedRevision: number; vaultGeneration: number }
+type Revision = { expectedRevision: number; realmGeneration: number }
 export type CalendarEventSink = (event: string, payload: { record: EventRecord; previous?: EventRecord }) => Promise<void>
 
 function validateReminders(record: { reminderOffsets?: number[]; reminderTime?: string }): void {
@@ -51,7 +51,7 @@ export function createCalendarDomain(owner: OwnerApi, publish: CalendarEventSink
     assertActive()
     const committed = await api.documents.update(ref, {
       expectedRevision: documentRevision?.expectedRevision ?? baseline.revision,
-      vaultGeneration: documentRevision?.vaultGeneration ?? baseline.vaultGeneration,
+      realmGeneration: documentRevision?.realmGeneration ?? baseline.realmGeneration,
       body: next.note, explicitTags: next.tags ?? [],
       operations: [
         { dataset: 'calendar.events', operation: 'update', key: { id }, values: row },
@@ -61,7 +61,7 @@ export function createCalendarDomain(owner: OwnerApi, publish: CalendarEventSink
       ]
     })
     if (JSON.stringify({ ...previous, updatedAt: undefined }) !== JSON.stringify({ ...next, updatedAt: undefined })) await committedEvent(emit, 'event.updated', { record: next, previous })
-    return { ok: true, record: next, documentRevision: { expectedRevision: committed.revision, vaultGeneration: committed.vaultGeneration } }
+    return { ok: true, record: next, documentRevision: { expectedRevision: committed.revision, realmGeneration: committed.realmGeneration } }
   }
   return {
     list: (startDate?: string, endDate?: string, api = owner) => read(api, startDate, endDate),

@@ -8,7 +8,7 @@ import { noteDateIconSvg, refreshNoteDateIcons, sanitizeNoteDateSvg } from '../s
 
 const fern = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path d="M4 4L40 40" stroke="currentColor"/></svg>'
 
-describe('vault calendar icons', () => {
+describe('realm calendar icons', () => {
   it('discovers user files and refreshes edited artwork', async () => {
     const mock = createMockValleyApi({ manifest: { id: 'calendar', drivers: ['files'] } })
     initRuntime(mock.api)
@@ -31,7 +31,7 @@ describe('vault calendar icons', () => {
     expect(() => sanitizeNoteDateSvg('<!DOCTYPE svg>'+fern)).toThrow()
   })
 
-  it('isolates catalogs between vault sessions', async () => {
+  it('isolates catalogs between realm sessions', async () => {
     const first = createMockValleyApi({ manifest: { id: 'calendar', drivers: ['files'] } })
     const second = createMockValleyApi({ manifest: { id: 'calendar', drivers: ['files'] } })
     expect(noteDateIconSvg('unknown', first.api)).toBe(noteDateIconSvg('pin', second.api))
@@ -44,7 +44,7 @@ it('seeds missing default icons without overwriting edited artwork', async () =>
   let readIcons: (() => Promise<unknown>) | undefined
   const mock = createMockValleyApi({ manifest: { id: 'calendar' } })
   const backend = {
-    index: mock.api.index, vault: mock.api.vault, data: mock.api.data, documents: mock.api.documents, settings: mock.api.settings,
+    index: mock.api.index, realm: mock.api.realm, data: mock.api.data, documents: mock.api.documents, settings: mock.api.settings,
     notifications: { ...mock.api.notifications, onOccurrence: () => () => {} }, lifecycle: { onResume: () => () => {} },
     i18n: { t: mock.api.ui.t, language: () => 'en', onLanguageChanged: () => () => {} },
     pluginId: 'calendar',

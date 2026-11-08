@@ -59,9 +59,9 @@ export class CalendarFileEditor {
     if (this.disposed) throw new Error('The Calendar editor is disposed.')
     this.active = true
     this.disposeRegistration = this.mountedView
-      ? this.owner.vault.editors.register(this.mountedView, this.provider)
-      : this.owner.vault.editors.registerDocument(this.path, this.instanceId, this.provider)
-    this.disposeChanges = this.owner.vault.onChanged(info => {
+      ? this.owner.realm.editors.register(this.mountedView, this.provider)
+      : this.owner.realm.editors.registerDocument(this.path, this.instanceId, this.provider)
+    this.disposeChanges = this.owner.realm.onChanged(info => {
       if (!info.full && !info.changes.some(change => change.relPath === this.path)) return
       this.pendingReload = true
       if (!this.locked) void this.reload()
@@ -116,8 +116,8 @@ export class CalendarFileEditor {
     this.publish()
     try {
       const result = this.mountedView
-        ? await this.owner.vault.editors.save(this.mountedView, content, baseline, revision)
-        : await this.owner.vault.editors.saveDocument(this.path, this.instanceId, content, baseline, revision)
+        ? await this.owner.realm.editors.save(this.mountedView, content, baseline, revision)
+        : await this.owner.realm.editors.saveDocument(this.path, this.instanceId, content, baseline, revision)
       if (!this.active || revision !== this.snapshot.revision || !result.ok) throw new Error('Calendar file changed or could not be saved. Your draft is preserved.')
       this.baseline = { content, baseline: result.baseline }
       this.pendingReload = false
@@ -141,7 +141,7 @@ export class CalendarFileEditor {
     const generation = ++this.generation
     this.update({ readiness: 'loading' })
     try {
-      const baseline = await this.owner.vault.readFileBaseline(this.path)
+      const baseline = await this.owner.realm.readFileBaseline(this.path)
       if (!this.active || generation !== this.generation) return
       if (!baseline?.baseline) throw new Error('Calendar file could not be loaded.')
       this.baseline = baseline

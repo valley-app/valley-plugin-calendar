@@ -255,7 +255,7 @@ describe('sourceMatchStats', () => {
     expect(sourceMatchStats(notes, source())).toEqual({ matched: 4, dated: 2 })
   })
 
-  it('reports zero matches for a value the vault does not use (the plural typo)', () => {
+  it('reports zero matches for a value the realm does not use (the plural typo)', () => {
     expect(sourceMatchStats(notes, source({ matchValue: 'contacts' }))).toEqual({ matched: 0, dated: 0 })
   })
 

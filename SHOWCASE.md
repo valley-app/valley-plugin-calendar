@@ -26,4 +26,4 @@ Open Calendar in the right sidebar to keep a compact month and the day's agenda 
 - **Note dates.** Notes with a date property, such as daily notes or project meetings, appear on their day.
 - **From other plugins.** To-Do tasks and Contacts birthdays show up automatically, each with its own icon.
 
-Everything stays in your vault. Calendar does not sign in to accounts or sync remote calendars.
+Everything stays in your realm. Calendar does not sign in to accounts or sync remote calendars.

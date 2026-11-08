@@ -70,7 +70,7 @@ export const AttachmentCard = ({
 
   React.useEffect(() => {
     let cancelled = false
-    void api.vault.fileInfo(relPath).then((info) => {
+    void api.realm.fileInfo(relPath).then((info) => {
       if (!cancelled) setSize(info?.size ?? null)
     })
     return () => {

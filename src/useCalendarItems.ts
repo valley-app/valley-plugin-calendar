@@ -97,7 +97,7 @@ export function deduplicateCalendarItems(items: readonly CalItem[]): CalItem[] {
  *
  * Note dates are materialized for the years around today and the caller's
  * focused year, and rebuilt only when {@link noteDatesSignature} changes, so an
- * unrelated vault save costs one fingerprint pass and no new arrays.
+ * unrelated realm save costs one fingerprint pass and no new arrays.
  */
 export function useCalendarItems(opts: { focusYear?: number; filePath?: string } = {}): CalendarItems {
   const { focusYear } = opts

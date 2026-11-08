@@ -4,7 +4,7 @@ Event and todo planner: left-sidebar agenda, right-sidebar compact calendar, and
 
 This repository owns the plugin’s interface, behavior, dependencies, schemas, tests, translations, and compiled releases. It uses Valley manifest API 5 and the injected SDK 6.
 
-Valley ships this core plugin as a verified release artifact in its application resources and copies that exact package into the vault's `.valley/plugins/packages/core/calendar/` when the vault opens, replacing the copy whenever the bundled release differs; never edit that copy by hand. Core and external installations run with the same sandbox, permissions, and SDK/IPC contract. Ordinary vault documents and saved plugin data (`.valley/plugins/data/calendar/`) keep their existing locations.
+Valley ships this core plugin as a verified release artifact in its application resources and copies that exact package into the realm's `.valley/plugins/packages/core/calendar/` when the realm opens, replacing the copy whenever the bundled release differs; never edit that copy by hand. Core and external installations run with the same sandbox, permissions, and SDK/IPC contract. Ordinary realm documents and saved plugin data (`.valley/plugins/data/calendar/`) keep their existing locations.
 
 ## Package
 
@@ -33,7 +33,7 @@ Valley release maintainers explicitly import the compiled artifact into the appl
 
 Version 3.1 shares identical in-flight event ranges and contributed-item reads across surfaces. Note-date sources load every page, and definition edits batch changed rows atomically without deleting retained definitions. A removal exceeding the host’s 1,000-operation limit reports an error before writing.
 
-Groups are edited here and in To-Do using one shared vault registry. Calendar displays local events, note dates, and plugin-contributed items; it does not connect to accounts or synchronize remote calendars. Task completion changes in place without navigating or resetting the current view.
+Groups are edited here and in To-Do using one shared realm registry. Calendar displays local events, note dates, and plugin-contributed items; it does not connect to accounts or synchronize remote calendars. Task completion changes in place without navigating or resetting the current view.
 
 ## Calendar documents and daily notes
 

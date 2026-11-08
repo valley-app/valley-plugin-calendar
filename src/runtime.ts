@@ -47,11 +47,11 @@ export function initRuntime(a: ValleyPluginApi): () => Promise<void> {
   owners.disposal = undefined
   owners.disposed = false
   owners.off?.()
-  let vault = a.getState().vault?.path
-  owners.off = a.subscribeState(['vault'], () => {
-    const next = a.getState().vault?.path
-    if (next === vault) return
-    vault = next
+  let realm = a.getState().realm?.path
+  owners.off = a.subscribeState(['realm'], () => {
+    const next = a.getState().realm?.path
+    if (next === realm) return
+    realm = next
     for (const value of owners.values.values()) value.invalidate?.()
   })
   activeOwners = owners

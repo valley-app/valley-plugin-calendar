@@ -85,7 +85,7 @@ export function initializeNoteDateIcons(owner: ValleyPluginApi): () => void {
     timer = setTimeout(() => { if (!disposed) void refreshNoteDateIcons(owner) }, 150)
   }
   void refreshNoteDateIcons(owner)
-  const off = owner.vault.onChanged(info => {
+  const off = owner.realm.onChanged(info => {
     if (info.full || info.changes.some(change => change.relPath.startsWith(`${CALENDAR_ICON_FOLDER}/`))) refresh()
   })
   return () => { disposed = true; clearTimeout(timer); off() }

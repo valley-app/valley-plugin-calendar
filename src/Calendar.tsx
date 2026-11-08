@@ -573,7 +573,7 @@ export function Calendar({
       'delete-item': async (action, context) => { if (action.type === 'delete-item') { const item = items.find(item => calendarItemKey(item) === action.key); if (!item?.file || item.file.path !== filePath || item.readOnly || quickAdd || fileEditor?.locked) throw Object.assign(new Error('This exact Calendar file item cannot be deleted now.'), { outcome: 'not-applied' }); await deleteCalendarFileEntry(item.file, () => context.validate()) } }
     },
     targets: {
-      'open-daily-note': async action => { const path = action.type === 'open-daily-note' ? dailyNotePath(action.date) : null; return path ? [{ kind: 'file', path, fileOperation: await api.vault.stat(path) ? 'read' : 'write' }] : [] }
+      'open-daily-note': async action => { const path = action.type === 'open-daily-note' ? dailyNotePath(action.date) : null; return path ? [{ kind: 'file', path, fileOperation: await api.realm.stat(path) ? 'read' : 'write' }] : [] }
     }
   })
 

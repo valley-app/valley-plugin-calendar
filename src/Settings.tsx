@@ -62,7 +62,7 @@ function GroupsSection(): ReactElement {
 
 function CalendarSection(): ReactElement {
   const { dayStartHour, dayEndHour, itemClickTarget } = useCalendarSettings()
-  const { Row, Section, SelectField, VaultFolderField } = api.ui.settings
+  const { Row, Section, SelectField, RealmFolderField } = api.ui.settings
   return (
     <>
       <ReminderDefaults />
@@ -84,8 +84,8 @@ function CalendarSection(): ReactElement {
         <DayWindowEditor dayStartHour={dayStartHour} dayEndHour={dayEndHour} />
       </Section>
       <Section>
-        <Row title={uiText('calendar.daily.folder')}><VaultFolderField value={calendarFolder('dailyNotesFolder')} ariaLabel={uiText('calendar.daily.folder')} onChange={() => {}} onCommit={value => void api.settings.set('dailyNotesFolder', value)} /></Row>
-        <Row title={uiText('calendar.files.folder')}><VaultFolderField value={calendarFolder('calendarFolder')} ariaLabel={uiText('calendar.files.folder')} onChange={() => {}} onCommit={value => void api.settings.set('calendarFolder', value)} /></Row>
+        <Row title={uiText('calendar.daily.folder')}><RealmFolderField value={calendarFolder('dailyNotesFolder')} ariaLabel={uiText('calendar.daily.folder')} onChange={() => {}} onCommit={value => void api.settings.set('dailyNotesFolder', value)} /></Row>
+        <Row title={uiText('calendar.files.folder')}><RealmFolderField value={calendarFolder('calendarFolder')} ariaLabel={uiText('calendar.files.folder')} onChange={() => {}} onCommit={value => void api.settings.set('calendarFolder', value)} /></Row>
       </Section>
       <GroupsSection />
     </>

@@ -103,9 +103,9 @@ export function subscribeDatasetRevisions(owner: ValleyPluginApi, datasets: stri
   let generation = -1
   const revisions = new Map<string, number>()
   const off = datasets.map((name) => owner.data.dataset(name).subscribe((event) => {
-    if (event.vaultGeneration < generation) return
-    if (event.vaultGeneration !== generation) {
-      generation = event.vaultGeneration
+    if (event.realmGeneration < generation) return
+    if (event.realmGeneration !== generation) {
+      generation = event.realmGeneration
       revisions.clear()
     }
     if ((revisions.get(name) ?? -1) >= event.revision) return

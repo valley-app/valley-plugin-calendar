@@ -2,7 +2,7 @@
  * Calendar fallback colors after explicit item and shared-group colors have
  * been considered by the caller.
  *
- * Frontmatter comes from the vault's `IndexEntry`, so there are no file reads
+ * Frontmatter comes from the realm's `IndexEntry`, so there are no file reads
  * at render time.
  */
 import { paletteRef } from '@valley/plugin-sdk/palette'

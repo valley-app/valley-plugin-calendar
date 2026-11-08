@@ -37,7 +37,7 @@ export function registerCalendarWorkflow(api: PluginBackendApi): () => Promise<v
   const offs = [
     api.rpc.handle('records.append', payload => domain.append((payload as { record: EventRecord }).record)),
     api.rpc.handle('records.update', payload => {
-      const input = payload as { id: string; record: EventRecord; expectedUpdatedAt?: string; documentRevision?: { expectedRevision: number; vaultGeneration: number } }
+      const input = payload as { id: string; record: EventRecord; expectedUpdatedAt?: string; documentRevision?: { expectedRevision: number; realmGeneration: number } }
       return domain.update(text(input.id, 'an event id'), input.record, input.expectedUpdatedAt, input.documentRevision)
     }),
     api.rpc.handle('records.delete', payload => domain.remove(text((payload as { id: string }).id, 'an event id'))),

@@ -519,7 +519,7 @@ export async function persistItemMove(
   const now = new Date().toISOString()
   if (item.readOnly) return // remote calendar events can't be moved
   if (item.file) {
-    const baseline = await api.vault.readTextDocument(item.file.path)
+    const baseline = await api.realm.readTextDocument(item.file.path)
     if (!baseline) throw new Error(uiText('calendar.error.missing'))
     const shift = daysBetween(item.date, date)
     await saveCalendarFile(item.file, { date: addDays(item.file.date, shift), endDate: item.file.endDate ? addDays(item.file.endDate, shift) : undefined, startTime, endTime }, 'occurrence', baseline)

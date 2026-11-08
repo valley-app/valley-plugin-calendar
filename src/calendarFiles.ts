@@ -264,7 +264,7 @@ export function editCalendarFile(raw: string, entry: CalendarFileEntry, patch: C
 
 export async function saveCalendarFile(entry: CalendarFileEntry, patch: CalendarItemPatch, scope: 'occurrence' | 'series', baseline: { content: string; revisionToken: string }): Promise<void> {
   const content = editCalendarFile(baseline.content, entry, patch, scope)
-  const result = await api.vault.writeTextDocumentGuarded(entry.path, content, baseline.revisionToken)
+  const result = await api.realm.writeTextDocumentGuarded(entry.path, content, baseline.revisionToken)
   if (!result.ok || result.editorConflict) throw new Error('Calendar file changed or could not be saved. Your draft is preserved.')
 }
 
@@ -305,7 +305,7 @@ export function appendCalendarFile(raw: string, path: string, patch: CalendarIte
 }
 
 export async function deleteCalendarFileEntry(entry: CalendarFileEntry, validateBeforeEffect?: () => Promise<void>): Promise<void> {
-  const baseline = await api.vault.readTextDocument(entry.path)
+  const baseline = await api.realm.readTextDocument(entry.path)
   if (!baseline) throw new Error('Calendar file unavailable.')
   const root = parseRoot(baseline.content)
   const original = new ICAL.Component(JSON.parse(JSON.stringify(root.toJSON())))
@@ -327,6 +327,6 @@ export async function deleteCalendarFileEntry(entry: CalendarFileEntry, validate
     }
   } else root.removeSubcomponent(component)
   await validateBeforeEffect?.()
-  const saved = await api.vault.writeTextDocumentGuarded(entry.path, preserveCalendar(baseline.content, original, root), baseline.revisionToken)
+  const saved = await api.realm.writeTextDocumentGuarded(entry.path, preserveCalendar(baseline.content, original, root), baseline.revisionToken)
   if (!saved.ok || saved.editorConflict) throw new Error('Calendar file changed. Reload before deleting.')
 }

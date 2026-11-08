@@ -18,7 +18,7 @@ const contact = (name: string, birthdate: string): IndexEntry => ({
   mtimeMs: 0
 })
 
-/** The note-date source the development vault seeds for birthdays. */
+/** The note-date source the development realm seeds for birthdays. */
 const BIRTHDAYS_SOURCE = {
   id: 'notedate-birthdays',
   title: 'Birthdays',

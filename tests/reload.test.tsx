@@ -232,15 +232,15 @@ it('deduplicates dataset revisions without accepting older generations', async (
     return id === 'calendar.events' ? { ...handle, query, subscribe: (listener) => { changed = listener; return () => {} } } : handle
   }) as typeof dataset
   await loadEvents()
-  const event: DatasetChangeEvent = { dataset: 'calendar.events', reason: 'update', revision: 2, vaultGeneration: 3 }
+  const event: DatasetChangeEvent = { dataset: 'calendar.events', reason: 'update', revision: 2, realmGeneration: 3 }
   changed(event)
   await loadEvents()
   changed(event)
   changed({ ...event, revision: 1 })
-  changed({ ...event, vaultGeneration: 2, revision: 99 })
+  changed({ ...event, realmGeneration: 2, revision: 99 })
   await loadEvents()
   expect(query).toHaveBeenCalledTimes(2)
-  changed({ ...event, vaultGeneration: 4, revision: 1 })
+  changed({ ...event, realmGeneration: 4, revision: 1 })
   await loadEvents()
   expect(query).toHaveBeenCalledTimes(3)
 })
@@ -377,10 +377,10 @@ it('fences pending pagination and removes read subscriptions when its runtime is
   expect(query).toHaveBeenCalledOnce()
   expect(off).toHaveBeenCalledTimes(4)
   const next = createMockValleyApi({ manifest: { id: 'calendar' }, datasets: {
-    'calendar.events': [{ id: 'moss', title: 'New vault', date: '2026-08-24' }]
+    'calendar.events': [{ id: 'moss', title: 'New realm', date: '2026-08-24' }]
   } })
   initRuntime(next.api)
-  expect((await loadEvents())[0]?.title).toBe('New vault')
+  expect((await loadEvents())[0]?.title).toBe('New realm')
 })
 
 it('bounds retained ranges and concurrent reads, and does not poison retries after failure', async () => {
@@ -475,7 +475,7 @@ it('does not let an unmounted reload callback invalidate a later runtime', async
   expect(list).toHaveBeenCalledOnce()
 })
 
-it('rechecks a settled range on a vault change even when no dataset event accompanies it', async () => {
+it('rechecks a settled range on a realm change even when no dataset event accompanies it', async () => {
   const mock = createMockValleyApi({ manifest: { id: 'calendar' }, datasets: {
     'calendar.events': [{ id: 'fern', title: 'Origin', date: '2026-08-24' }]
   } })
@@ -485,7 +485,7 @@ it('rechecks a settled range on a vault change even when no dataset event accomp
   mock.api.data.dataset = ((id: string) => id === 'calendar.events' ? { ...dataset(id), query } : dataset(id)) as typeof dataset
   expect((await loadEvents())[0]?.title).toBe('Origin')
   mock.datasets.set('calendar.events', [{ id: 'moss', title: 'Destination', date: '2026-08-24' }])
-  mock.emitState({ vault: { path: '/managed/destination', name: 'destination', displayName: 'Destination' } })
+  mock.emitState({ realm: { path: '/managed/destination', name: 'destination', displayName: 'Destination' } })
   expect((await loadEvents())[0]?.title).toBe('Destination')
   expect(query).toHaveBeenCalledTimes(2)
 })
