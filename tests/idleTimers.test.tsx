@@ -91,6 +91,29 @@ describe('Calendar reminder owner at idle', () => {
     await stop()
   })
 
+  it('issues no request after stop and stops cleanly when the closing runtime refuses one', async () => {
+    const records = [event('a'), event('b')]
+    const { api, list, listeners, stop } = owner(records)
+    await settle()
+    let release!: () => void
+    const held = new Promise<void>(resolve => { release = resolve })
+    const schedule = vi.mocked(api.notifications.schedule).mockReset().mockImplementationOnce(async () => { await held; throw new Error('Plugin runtime is closing') })
+    records[0] = { ...records[0], startTime: '10:00' }
+    listeners.settings!()
+    await settle()
+    expect(schedule).toHaveBeenCalledTimes(1)
+    const stopping = stop()
+    release()
+    await expect(stopping).resolves.toBeUndefined()
+    await settle()
+    expect(schedule).toHaveBeenCalledTimes(1)
+    expect(api.rpc.emit).not.toHaveBeenCalled()
+    const reads = list.mock.calls.length
+    listeners.settings!()
+    await settle()
+    expect(list).toHaveBeenCalledTimes(reads)
+  })
+
   it('arms no timer after stopping', async () => {
     const { stop } = owner()
     await settle()

@@ -23,9 +23,12 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
   let pending = Promise.resolve()
   let keys: string[] = []
   let fired: Record<string, number> = {}
+  const live = (): void => { if (!active) throw new Error('Calendar reminders are stopped.') }
   const save = async () => {
+    live()
     fired = Object.fromEntries(Object.entries(fired).sort((a, b) => b[1] - a[1]).slice(0, 4096))
     const current = await api.data.files.readTextBaseline('reminder-state.json')
+    live()
     const result = await api.data.files.writeTextGuarded('reminder-state.json', JSON.stringify({ keys, fired }), current?.baseline ?? null)
     if (!result.ok) throw new Error('Could not persist reminder state')
   }
@@ -36,8 +39,9 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
     fired = raw.fired && typeof raw.fired === 'object' ? raw.fired : {}
   })
   const queue = (work: () => Promise<void>) => {
+    if (!active) return
     pending = pending.catch(() => {}).then(async () => { await ready; if (active) await work() })
-    void pending.catch(() => api.rpc.emit('reminders.error', { code: 'REMINDER_RECONCILIATION_FAILED' }))
+    void pending.catch(() => { if (active) api.rpc.emit('reminders.error', { code: 'REMINDER_RECONCILIATION_FAILED' }) })
   }
   const files = createIndexObserver(api, { extensions: ['.ics', '.ifb', '.vcs'], fields: ['excluded'] })
   let scheduled = false
@@ -55,6 +59,7 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
         const key = `reminder:${record.id}:${occurrence.id}`
         wanted.push(key)
         if (fired[key] === occurrence.at) continue
+        live()
         await api.notifications.schedule(key, [occurrence.at], {
           eventId: 'reminder', title: record.title, body: record.note.trim().split('\n')[0], targetItemId: record.id,
           reminderId: occurrence.id, scheduleRevision: String(occurrence.at),
@@ -66,12 +71,14 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
         })
       }
     }
+    live()
     const indexed = files.getSnapshot()
     if (indexed.status !== 'ready') return
     const now = Date.now()
     const from = new Date(now - 7 * 86400000).toISOString().slice(0, 10)
     const to = new Date(now + 90 * 86400000).toISOString().slice(0, 10)
     for (const file of indexed.entries.filter(file => !file.excluded)) {
+      live()
       const content = await api.realm.read(file.relPath)
       if (!content) continue
       for (const event of parseCalendarFile(content.content, file.relPath, from, to).entries) {
@@ -81,6 +88,7 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
           const key = `reminder:file:${identity}`
           wanted.push(key)
           if (fired[key] === alarm.at) continue
+          live()
           await api.notifications.schedule(key, [alarm.at], { eventId: 'reminder', title: event.title.slice(0, 256), body: event.note.slice(0, 4096), targetItemId: file.relPath.slice(0, 256), reminderId: identity, scheduleRevision: String(alarm.at), actions: [
             { id: 'open', kind: 'open', label: api.i18n.t('notification.open') },
             { id: 'snooze', kind: 'snooze', label: api.i18n.t('notification.snooze'), choices: [5, 10, 30, 60].map(minutes => ({ id: String(minutes), label: api.i18n.t('notification.minutes', { count: minutes }), minutes })) }
@@ -89,7 +97,7 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
       }
     }
     const kept = new Set(wanted)
-    for (const key of keys) if (!kept.has(key)) await api.notifications.cancel(key)
+    for (const key of keys) if (!kept.has(key)) { live(); await api.notifications.cancel(key) }
     const unchanged = kept.size === keys.length && keys.every(key => kept.has(key))
     keys = [...kept]
     if (!unchanged) await save()
@@ -119,5 +127,5 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
   }
   nextDay()
   reconcile()
-  return async () => { active = false; clearTimeout(dayTimer); offFiles(); offRealm(); await files.dispose(); offData(); offSettings(); offResume(); offOccurrence(); offAction(); await pending }
+  return async () => { active = false; clearTimeout(dayTimer); offFiles(); offRealm(); await files.dispose().catch(() => {}); offData(); offSettings(); offResume(); offOccurrence(); offAction(); await pending.catch(() => {}) }
 }
