@@ -155,7 +155,6 @@ export function AgendaPanel(): ReactElement {
 
   // Items arrive in pages from several sources, so the first page may not hold the days around today yet: keep
   // aiming at today (or the nearest later day) as pages arrive, until the user scrolls or picks a date.
-  const initialTarget = React.useRef<string | undefined>(undefined)
   React.useEffect(() => {
     const body = bodyRef.current
     if (!body) return
@@ -170,9 +169,7 @@ export function AgendaPanel(): ReactElement {
   React.useEffect(() => {
     if (didInitialScroll.current || days.length === 0) return
     const target = days.includes(todayKey) ? todayKey : [...days].reverse().find((k) => k >= todayKey)
-    if (!target || target === initialTarget.current) return
-    initialTarget.current = target
-    show(target, { block: 'start' })
+    if (target) show(target, { block: 'start' })
   }, [days, show, todayKey])
 
   React.useEffect(() => {
