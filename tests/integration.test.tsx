@@ -1532,6 +1532,18 @@ describe('AgendaPanel initial scroll', () => {
     await waitFor(() => expect(container.querySelector(`[data-visible-key="${dayOffset(200)}"]`)).toBeTruthy())
     await waitFor(() => expect(scrolledKeys()).toContain(dayOffset(2)))
   })
+  it('keeps a saved selected date in view when a later page adds days above it', async () => {
+    let release!: () => void
+    const sourceDelay = new Promise<void>((resolve) => { release = resolve })
+    setupCalendarApi({ events: [{ id: 'chosen', title: 'Chosen', date: dayOffset(-60) } as DataRecord], sourceDelay, todos: [{ id: 'later', title: 'Later', dueDate: dayOffset(200) }] })
+    await act(async () => { await patchTimeControl({ view: 'month', cursor: `${dayOffset(0).slice(0, 8)}01`, selectedDate: dayOffset(-60), rangeStart: null, rangeEnd: null }) })
+    const { container } = render(React.createElement(AgendaPanel))
+    await waitFor(() => expect(container.querySelector(`[data-visible-key="${dayOffset(-60)}"]`)).toBeTruthy())
+    vi.mocked(Element.prototype.scrollIntoView).mockClear()
+    await act(async () => { release(); await sourceDelay })
+    await waitFor(() => expect(container.querySelector(`[data-visible-key="${dayOffset(200)}"]`)).toBeTruthy())
+    await waitFor(() => expect(scrolledKeys()).toContain(dayOffset(-60)))
+  })
   it('leaves the list where the user scrolled it before the later page arrived', async () => {
     await openWithLateSource((container) => fireEvent.wheel(container.querySelector('.agenda-body')!, { deltaY: 120 }))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })

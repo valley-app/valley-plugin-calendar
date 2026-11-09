@@ -164,11 +164,15 @@ export function AgendaPanel(): ReactElement {
     return () => events.forEach((type) => body.removeEventListener(type, stop))
   }, [])
   React.useEffect(() => {
-    if (tc.selectedDate || revealTarget) didInitialScroll.current = true
-  }, [revealTarget, tc.selectedDate])
+    if (revealTarget) didInitialScroll.current = true
+  }, [revealTarget])
+  // Row heights above the target are still estimates and later pages add days above it, so one early aim drifts.
+  const selectedDate = React.useRef(tc.selectedDate)
+  selectedDate.current = tc.selectedDate
   React.useEffect(() => {
     if (didInitialScroll.current || days.length === 0) return
-    const target = days.includes(todayKey) ? todayKey : [...days].reverse().find((k) => k >= todayKey)
+    const selected = selectedDate.current
+    const target = selected && days.includes(selected) ? selected : days.includes(todayKey) ? todayKey : [...days].reverse().find((k) => k >= todayKey)
     if (target) show(target, { block: 'start' })
   }, [days, show, todayKey])
 
