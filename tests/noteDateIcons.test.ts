@@ -13,7 +13,7 @@ describe('realm calendar icons', () => {
     const mock = createMockValleyApi({ manifest: { id: 'calendar', drivers: ['files'] } })
     initRuntime(mock.api)
     let svg = fern
-    const read = vi.spyOn(mock.api.backend, 'call').mockImplementation(async () => ({ icons: { pin: fern, fern: svg }, failed: [] }))
+    const read = vi.spyOn(mock.api.backend, 'call').mockImplementation(async () => ({ icons: { pin: fern, fern: svg }, failed: [] }) as never)
     await refreshNoteDateIcons(mock.api)
     expect(noteDateIconSvg('fern', mock.api)).toContain('viewBox="0 0 48 48"')
     svg = fern.replace('M4 4L40 40', 'M8 8L32 32')

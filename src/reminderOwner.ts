@@ -14,6 +14,10 @@ export function reminderTimes(record: EventRecord, defaults: number[] = [10]): {
   return offsets.map(minutes => ({ id: String(minutes), at: at - minutes * 60000 }))
 }
 
+const CALENDAR_FILE = /\.(?:ics|ifb|vcs)$/i
+const touchesCalendarFile = (change: { paths: string[]; oldPath?: string; newPath?: string }): boolean =>
+  [...change.paths, change.oldPath, change.newPath].some(path => typeof path === 'string' && CALENDAR_FILE.test(path))
+
 export function startReminderOwner(api: PluginBackendApi, list: () => Promise<EventRecord[]>, complete?: (id: string) => Promise<unknown>): () => Promise<void> {
   let active = true
   let pending = Promise.resolve()
@@ -36,7 +40,13 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
     void pending.catch(() => api.rpc.emit('reminders.error', { code: 'REMINDER_RECONCILIATION_FAILED' }))
   }
   const files = createIndexObserver(api, { extensions: ['.ics', '.ifb', '.vcs'], fields: ['excluded'] })
-  const reconcile = () => queue(async () => {
+  let scheduled = false
+  const reconcile = () => {
+    if (!active || scheduled) return
+    scheduled = true
+    queue(async () => { scheduled = false; await reconcileNow() })
+  }
+  const reconcileNow = async (): Promise<void> => {
     const wanted: string[] = []
     const settings = api.settings.get().reminderOffsets
     const defaults = Array.isArray(settings) ? settings as number[] : [10]
@@ -78,12 +88,14 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
         }
       }
     }
-    for (const key of keys) if (!wanted.includes(key)) await api.notifications.cancel(key)
-    keys = wanted
-    await save()
-  })
+    const kept = new Set(wanted)
+    for (const key of keys) if (!kept.has(key)) await api.notifications.cancel(key)
+    const unchanged = kept.size === keys.length && keys.every(key => kept.has(key))
+    keys = [...kept]
+    if (!unchanged) await save()
+  }
   const offFiles = files.subscribe(reconcile)
-  const offRealm = api.realm.onChanged(reconcile)
+  const offRealm = api.realm.onChanged(info => { if (touchesCalendarFile(info)) reconcile() })
   const offData = api.data.dataset('calendar.events').subscribe(reconcile)
   const offSettings = api.settings.subscribe(reconcile)
   const offResume = api.lifecycle.onResume(reconcile)
@@ -98,7 +110,14 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
     reconcile()
     return result
   })
-  const interval = setInterval(reconcile, 60_000)
+  // Alarms live in the host's scheduler; only the 90-day window of file alarms and local wall-clock times move by themselves.
+  let dayTimer: ReturnType<typeof setTimeout> | undefined
+  const nextDay = (): void => {
+    const now = new Date()
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime()
+    dayTimer = setTimeout(() => { if (!active) return; reconcile(); nextDay() }, Math.max(1000, midnight - now.getTime() + 1000))
+  }
+  nextDay()
   reconcile()
-  return async () => { active = false; clearInterval(interval); offFiles(); offRealm(); await files.dispose(); offData(); offSettings(); offResume(); offOccurrence(); offAction(); await pending }
+  return async () => { active = false; clearTimeout(dayTimer); offFiles(); offRealm(); await files.dispose(); offData(); offSettings(); offResume(); offOccurrence(); offAction(); await pending }
 }

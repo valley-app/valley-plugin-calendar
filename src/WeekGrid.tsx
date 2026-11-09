@@ -114,11 +114,23 @@ export function WeekGrid({
   dragRef.current = drag
   const movedRef = React.useRef(false)
 
-  // Live "now" indicator — tick every minute so the red line tracks the clock.
+  // Live "now" indicator: one timer to the next minute, armed only while this surface's document is visible.
   const [now, setNow] = React.useState(() => new Date())
   React.useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(id)
+    const doc = bodyRef.current?.ownerDocument
+    const view = doc?.defaultView
+    if (!doc || !view) return
+    let timer: number | undefined
+    const stop = (): void => { if (timer !== undefined) view.clearTimeout(timer); timer = undefined }
+    const tick = (): void => {
+      stop()
+      if (doc.hidden) return
+      setNow(new Date())
+      timer = view.setTimeout(tick, 60_000 - Date.now() % 60_000)
+    }
+    tick()
+    doc.addEventListener('visibilitychange', tick)
+    return () => { stop(); doc.removeEventListener('visibilitychange', tick) }
   }, [])
 
   const dayCount = days.length
