@@ -353,5 +353,6 @@
   "auto.eebb15d3cbff": "Event created. Uses committed owner data and authenticated causation.",
   "auto.f24627c37bb3": "List events",
   "auto.fd84716b23ca": "Sidebar calendar view",
-  "type": "exact"
+  "type": "exact",
+  "menu.today": "Ir a hoy"
 }

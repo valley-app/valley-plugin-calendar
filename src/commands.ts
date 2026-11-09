@@ -253,6 +253,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
 
     register({
       id: 'open-page',
+      menu: false,
       label: 'Open Calendar page', labelKey: 'auto.b29a9852d77e',
       sideEffect: 'read',
       run: () => openCalendarPage(api),
@@ -381,6 +382,7 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
 
     register({
       id: 'today',
+      menu: { group: 'navigate', order: 10, label: 'Go to Today', labelKey: 'menu.today' },
       label: 'Calendar: Go to today', labelKey: 'auto.ee8581831b9c',
       sideEffect: 'write',
       run: async () => { markExplicitCalendarNavigation(); return { value: await api.workspace.patchTimeControl(selectionPatch(todayIso())), revert: null } },
