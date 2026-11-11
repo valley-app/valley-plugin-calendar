@@ -249,14 +249,14 @@ export function Calendar({
     }, 220)
   }, [itemClickTarget, surface])
 
-  const editItem = React.useCallback((item: CalItem): void => {
+  const editItem = React.useCallback((item: CalItem, newTab?: boolean): void => {
     if (itemClickTimerRef.current) {
       clearTimeout(itemClickTimerRef.current)
       itemClickTimerRef.current = null
     }
     setSelectedItemKey(calendarItemKey(item))
     selectCalendarProperties(item, surface)
-    if (item.kind === 'noteDate' && item.filePath) { api.workspace.openFile(item.filePath); return }
+    if (item.kind === 'noteDate' && item.filePath) { api.workspace.openFile(item.filePath, undefined, { newTab }); return }
     if (item.kind === 'sourced' && item.sourceId) { void editSourcedItem(item.sourceId, item.id); return }
     if (item.readOnly) return
     setQuickAdd({ date: item.date, editItem: item })
@@ -597,7 +597,7 @@ export function Calendar({
 
   const navActions = (
     <div className="calendar-actions">
-      <button title={uiText('calendar.daily.open')} aria-label={uiText('calendar.daily.open')} onClick={() => void openDailyNote(tc.selectedDate ?? isoDay(today))}>＋</button>
+      <button title={uiText('calendar.daily.open')} aria-label={uiText('calendar.daily.open')} onClick={(e) => void openDailyNote(tc.selectedDate ?? isoDay(today), undefined, true, api.ui.hasModKey(e))}>＋</button>
       <button aria-label={uiText('auto.50f94286ba30')} onClick={() => step(-1)}>‹</button>
       <button aria-label={uiText('auto.24345a14377f')} onClick={goToday}>{uiText('auto.7a46866bc719')}</button>
       <button aria-label={uiText('auto.bc981983e7f5')} onClick={() => step(1)}>›</button>
@@ -698,7 +698,7 @@ export function Calendar({
                   color={colorFor(calendarItem)}
                   revealNonce={revealNonce}
                   onClick={() => { selectCalendarProperties(calendarItem, surface); openItemInCalendarMain(calendarItem) }}
-                  onDoubleClick={() => editItem(calendarItem)}
+                  onDoubleClick={(newTab) => editItem(calendarItem, newTab)}
                   onContextMenu={(event) => void handleItemAction(calendarItem, event)}
                 />
               )

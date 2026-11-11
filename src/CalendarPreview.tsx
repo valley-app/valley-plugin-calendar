@@ -57,17 +57,18 @@ export function CalendarPreview({ value, sourcePath, plain = false }: { value: s
     if (!target) return
     event.preventDefault()
     event.stopPropagation()
+    const newTab = api.ui.hasModKey(event)
     const ref = target.dataset.wikilink ?? target.dataset.embed ?? target.dataset.src
     const href = target.getAttribute('href') ?? ''
     if (ref) {
       const path = await api.workspace.resolveWikilink(ref.split('|')[0].split('#')[0])
-      if (path) api.workspace.openFile(path)
-    } else if (parseAppOpenUrl(href)) api.workspace.openFile(parseAppOpenUrl(href)!)
+      if (path) api.workspace.openFile(path, undefined, { newTab })
+    } else if (parseAppOpenUrl(href)) api.workspace.openFile(parseAppOpenUrl(href)!, undefined, { newTab })
     else if (parseLinkUrl(href)) await api.links.open(href)
     else if (href && !href.startsWith('#')) {
       const path = await api.workspace.resolveWikilink(href)
-      if (path) api.workspace.openFile(path)
-      else if (sourcePath && !href.includes(':') && !href.includes('..')) api.workspace.openFile(`${sourcePath.slice(0, sourcePath.lastIndexOf('/') + 1)}${href}`)
+      if (path) api.workspace.openFile(path, undefined, { newTab })
+      else if (sourcePath && !href.includes(':') && !href.includes('..')) api.workspace.openFile(`${sourcePath.slice(0, sourcePath.lastIndexOf('/') + 1)}${href}`, undefined, { newTab })
     }
   }
   return plain ? <div className="agenda-card-note">{text}</div>

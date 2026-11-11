@@ -26,7 +26,7 @@ export function dailyNotePath(date: string): string | null {
 }
 
 /** `mayCreate` false (the caller was authorized only to read the note) refuses a missing note as not-applied instead of creating it. */
-export async function openDailyNote(date: string, validateBeforeEffect?: (path: string) => Promise<void>, mayCreate = true): Promise<void> {
+export async function openDailyNote(date: string, validateBeforeEffect?: (path: string) => Promise<void>, mayCreate = true, newTab = false): Promise<void> {
   const path = dailyNotePath(date)
   if (!path) throw new Error(uiText('calendar.daily.invalid'))
   if (!await api.realm.stat(path)) {
@@ -36,5 +36,6 @@ export async function openDailyNote(date: string, validateBeforeEffect?: (path: 
     if (!result.ok && !await api.realm.stat(path)) throw new Error(uiText('calendar.error.save'))
   }
   await validateBeforeEffect?.(path)
-  api.workspace.openFile(path)
+  if (newTab) api.workspace.openFile(path, undefined, { newTab })
+  else api.workspace.openFile(path)
 }

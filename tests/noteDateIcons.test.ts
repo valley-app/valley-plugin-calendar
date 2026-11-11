@@ -62,7 +62,7 @@ it('seeds missing default icons without overwriting edited artwork', async () =>
   expect(files.get('cake.svg')).toBe(fern)
   expect(result.icons.fern).toBe(fern)
   expect(Object.keys(DEFAULT_NOTE_DATE_ICONS).every(id => files.has(`${id}.svg`))).toBe(true)
-  expect(backend.storage.open).toHaveBeenCalledWith({ area: 'metadata', path: 'assets/icon/calendar-icon', kind: 'directory', mode: 'write' })
+  expect(backend.storage.open).toHaveBeenCalledWith({ area: 'metadata', path: 'assets/icons/calendar-icon', kind: 'directory', mode: 'write' })
   expect(backend.storage.close).toHaveBeenCalledWith('icons')
   await dispose()
 })

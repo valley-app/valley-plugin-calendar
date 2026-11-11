@@ -5,7 +5,7 @@ import { DEFAULT_NOTE_DATE_ICONS } from '../noteDateIconDefaults'
 export function register(api: PluginBackendApi): () => Promise<void> {
   const offWorkflow = registerCalendarWorkflow(api)
   const offIcons = api.rpc.handle('noteDateIcons', async () => {
-    const grant = await api.storage.open({ area: 'metadata', path: 'assets/icon/calendar-icon', kind: 'directory', mode: 'write' })
+    const grant = await api.storage.open({ area: 'metadata', path: 'assets/icons/calendar-icon', kind: 'directory', mode: 'write' })
     const location = (path: string) => ({ handle: grant.handle, path })
     try {
       await api.storage.mkdir(location(''))

@@ -79,9 +79,9 @@ export function AgendaPanel(): ReactElement {
     openItemInCalendarMain(item)
   }, [])
 
-  const editItem = React.useCallback((item: CalItem): void => {
+  const editItem = React.useCallback((item: CalItem, newTab?: boolean): void => {
     selectCalendarProperties(item, 'left_sidebar')
-    if (item.kind === 'noteDate' && item.filePath) { api.workspace.openFile(item.filePath); return }
+    if (item.kind === 'noteDate' && item.filePath) { api.workspace.openFile(item.filePath, undefined, { newTab }); return }
     if (item.kind === 'sourced' && item.sourceId) { void editSourcedItem(item.sourceId, item.id); return }
     if (item.readOnly) return
     setQuickAdd({ date: item.date, editItem: item })
@@ -230,7 +230,7 @@ export function AgendaPanel(): ReactElement {
       <div className="panel-header">
         <span className="panel-title">{uiText('auto.891e9d6d47f1')}</span>
         <div className="agenda-header-actions">
-          <button className="agenda-today-btn" title={uiText('calendar.daily.open')} aria-label={uiText('calendar.daily.open')} onClick={() => { void openDailyNote(tc.selectedDate ?? todayKey) }}><CalendarDays /></button>
+          <button className="agenda-today-btn" title={uiText('calendar.daily.open')} aria-label={uiText('calendar.daily.open')} onClick={(e) => { void openDailyNote(tc.selectedDate ?? todayKey, undefined, true, api.ui.hasModKey(e)) }}><CalendarDays /></button>
           <CalendarFilterButton
             label={uiText('calendar.filter.sources')}
             icon={<Layers />}
@@ -254,7 +254,7 @@ export function AgendaPanel(): ReactElement {
           )}
           <button
             className="plugin-open-page"
-            onClick={() => api.workspace.openMainTab()}
+            onClick={(e) => api.workspace.openMainTab(api.ui.hasModKey(e) ? { newTab: true } : undefined)}
             aria-label={uiText('auto.9ee309dcedc9')}
             title={uiText('auto.9ee309dcedc9')}
           />
@@ -327,7 +327,7 @@ export function AgendaPanel(): ReactElement {
                       color={colorFor(it)}
                       revealNonce={revealed ? revealTarget?.nonce : undefined}
                       onClick={() => selectItem(it)}
-                      onDoubleClick={() => editItem(it)}
+                      onDoubleClick={(newTab) => editItem(it, newTab)}
                       onContextMenu={(e) => void openItemMenu(it, e)}
                     />
                     )

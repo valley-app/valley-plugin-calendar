@@ -47,7 +47,7 @@
       "icon": "calendar-days",
       "storage": [
         ".valley/plugins/data/calendar/",
-        ".valley/assets/icon/calendar-icon/"
+        ".valley/assets/icons/calendar-icon/"
       ]
     },
     {
@@ -2846,7 +2846,7 @@
   "permissions": {
     "storage": {
       "metadata": [
-        "assets/icon/calendar-icon"
+        "assets/icons/calendar-icon"
       ]
     },
     "largeData": true

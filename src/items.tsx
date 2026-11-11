@@ -295,7 +295,7 @@ export function CalendarAgendaCard({
   color: string
   revealNonce?: number
   onClick: () => void
-  onDoubleClick: () => void
+  onDoubleClick: (newTab: boolean) => void
   onContextMenu: (event: React.MouseEvent) => void
 }): ReactElement {
   const clickTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -315,7 +315,7 @@ export function CalendarAgendaCard({
       onDoubleClick={event => {
         if ((event.target as Element).closest('button, input, a, textarea, [contenteditable="true"], .cm-editor')) return
         if (clickTimer.current) clearTimeout(clickTimer.current)
-        onDoubleClick()
+        onDoubleClick(api.ui.hasModKey(event))
       }}
       onContextMenu={event => {
         if (clickTimer.current) clearTimeout(clickTimer.current)
@@ -442,7 +442,7 @@ export function openNoteMenuItem(item: CalItem): UiMenuItem[] {
     id: 'open-note',
     label: uiText('auto.c66a827e3397'),
     icon: <ValleyIcon />,
-    onSelect: () => api.workspace.openFile(relPath)
+    onSelect: (context?: { newTab?: boolean }) => api.workspace.openFile(relPath, undefined, { newTab: context?.newTab })
   }]
 }
 
@@ -476,7 +476,7 @@ export function eventMenuItems(item: CalItem): UiMenuItem[] {
         label: fileName(relPath),
         description: relPath,
         icon: <Paperclip />,
-        onSelect: () => api.workspace.openFile(relPath)
+        onSelect: (context?: { newTab?: boolean }) => api.workspace.openFile(relPath, undefined, { newTab: context?.newTab })
       }))
     })
   }

@@ -71,7 +71,7 @@ Context menus contain actions with leading icons, including submenu entries. Cal
 
 Settings → Calendar → Note dates and the left sidebar share one saved source order. Search source names, folders or matching rules; filtered reordering preserves the other sources. Drag a source’s grip or use its arrow keys to reorder; chevrons reveal the matching details. The full-width standard header switch turns source visibility on or off while preserving definitions. Empty matches show neutral “0 notes found” text. Add source and the per-source Hide/Delete controls use compact aligned icon labels.
 
-Source icons live in `.valley/assets/icon/calendar-icon/`. Missing bundled SVGs are seeded without replacing saved artwork. Added or edited SVGs are discovered automatically, and Refresh icons is available in settings.
+Source icons live in `.valley/assets/icons/calendar-icon/`. Missing bundled SVGs are seeded without replacing saved artwork. Added or edited SVGs are discovered automatically, and Refresh icons is available in settings.
 
 ## Workflow integration
 

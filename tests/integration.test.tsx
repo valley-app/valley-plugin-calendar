@@ -393,7 +393,7 @@ describe('normalizeEventRecord', () => {
     ])
     await menu[0].submenu?.[0].onSelect?.()
     await menu[1].submenu?.[0].onSelect?.()
-    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Archive/fern-sheet.pdf')
+    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Archive/fern-sheet.pdf', undefined, { newTab: undefined })
     expect(mock.api.links.open).toHaveBeenCalledWith('https://example.com/fern')
   })
 })
@@ -1829,7 +1829,7 @@ describe('AgendaPanel item clicks', () => {
     await act(async () => {
       await openNote?.onSelect?.()
     })
-    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Notes/Event.md')
+    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Notes/Event.md', undefined, { newTab: undefined })
   })
 })
 
@@ -1996,7 +1996,9 @@ describe('Note dates on the calendar', () => {
     const open = menu.find((m) => m.label === 'Open note')
     expect(open).toBeTruthy()
     open?.onSelect?.()
-    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Biodiversity/Fern.md')
+    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Biodiversity/Fern.md', undefined, { newTab: undefined })
+    ;(open?.onSelect as ((context?: { newTab?: boolean }) => unknown) | undefined)?.({ newTab: true })
+    expect(mock.api.workspace.openFile).toHaveBeenLastCalledWith('Biodiversity/Fern.md', undefined, { newTab: true })
   })
 
   it('lists the entry in the agenda panel, in its own day section', async () => {
@@ -2504,7 +2506,7 @@ describe('native agenda Markdown', () => {
     const view = render(<div className="agenda-card"><CalendarPreview value="[[Forest.md]] **Canopy**" /></div>)
     expect(await screen.findByText('Canopy')).toHaveProperty('tagName', 'STRONG')
     await act(async () => { fireEvent.click(screen.getByText('Forest')) })
-    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('plugins/calendar/Forest.md')
+    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('plugins/calendar/Forest.md', undefined, { newTab: false })
     fireEvent.scroll(view.container.firstElementChild!, { target: { scrollTop: 50 } })
     view.rerender(<div className="agenda-card"><CalendarPreview value="[[Forest.md]] **Canopy**" /></div>)
     expect(renderer).toHaveBeenCalledTimes(1)
