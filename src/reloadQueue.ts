@@ -2,6 +2,12 @@ import { createBoundedCache, type ValleyPluginApi } from '@valley/plugin-sdk'
 
 const REVISION_CACHE_MAX_BYTES = 16 * 1024 * 1024
 
+/** The host refused the read because this plugin is being disabled, enabled or replaced: its view goes away, nothing failed. */
+function isLifecycleRefusal(error: unknown): boolean {
+  const value = error as { code?: unknown; message?: unknown } | null
+  return value?.code === 'PLUGIN_LIFECYCLE_CHANGE' || typeof value?.message === 'string' && value.message.includes('preparing its lifecycle change')
+}
+
 export function createReloadQueue<T>(read: () => Promise<T>, publish: (value: T) => void, onError?: (error: unknown) => void): {
   reload: () => Promise<void>
   dispose: () => void
@@ -21,7 +27,7 @@ export function createReloadQueue<T>(read: () => Promise<T>, publish: (value: T)
             if (!dirty && !disposed) publish(value)
           }
         })().finally(() => { pending = null })
-        if (onError) void pending.catch((error) => { if (!disposed) onError(error) })
+        if (onError) void pending.catch((error) => { if (!disposed && !isLifecycleRefusal(error)) onError(error) })
       }
       return pending
     },

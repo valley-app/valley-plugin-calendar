@@ -184,6 +184,19 @@ it('reports a coalesced fire-and-forget failure once and allows the next refresh
   expect(publish).toHaveBeenCalledWith(['fern'])
 })
 
+it('stays quiet when a reload is refused because the plugin is being disabled or replaced', async () => {
+  const refusal = Object.assign(new Error('Plugin session is preparing its lifecycle change'), { code: 'PLUGIN_LIFECYCLE_CHANGE' })
+  const read = vi.fn().mockRejectedValueOnce(refusal).mockRejectedValueOnce(new Error('Plugin session is preparing its lifecycle change')).mockResolvedValue(['fern'])
+  const publish = vi.fn()
+  const report = vi.fn()
+  const queue = createReloadQueue(read, publish, report)
+  await queue.reload().catch(() => undefined)
+  await queue.reload().catch(() => undefined)
+  await queue.reload()
+  expect(report).not.toHaveBeenCalled()
+  expect(publish).toHaveBeenCalledWith(['fern'])
+})
+
 it('keeps settled ranges shared across views and ignores navigation and unrelated datasets', async () => {
   const mock = createMockValleyApi({ manifest: { id: 'calendar' }, datasets: {
     'calendar.events': [{ id: 'fern', title: 'Fern', date: '2026-08-24' }]
