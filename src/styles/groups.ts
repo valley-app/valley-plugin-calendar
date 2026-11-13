@@ -19,6 +19,11 @@ export const groupListStyles = `/* Groups lists: the shared Groups editor and ev
   margin-top: var(--space-2);
 }
 
+/* The list owns its whole row: title and description above, the list below. */
+.settings-path-row.settings-groups-row {
+  display: block;
+}
+
 .settings-groups > * {
   grid-column: 1 / -1;
 }

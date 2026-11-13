@@ -113,8 +113,12 @@ export function LocalGroupsSettings(): ReactElement {
   }
 
   return (
-    <Section title={uiText('calendar.localGroups.title')}>
-      <span className="settings-empty-text">{uiText('calendar.localGroups.description')}</span>
+    <Section>
+      <div className="settings-path-row settings-groups-row">
+      <span className="settings-toggle-text">
+        <span className="settings-toggle-title">{uiText('calendar.localGroups.title')}</span>
+        <span className="settings-toggle-desc">{uiText('calendar.localGroups.description')}</span>
+      </span>
       <div className="settings-colorrules settings-groups" role="list" aria-label={uiText('calendar.localGroups.title')}>
         {saveError && <span role="alert" className="settings-path-error">{uiText('calendar.localGroups.saveError')}</span>}
         {local.map((group, index) => {
@@ -194,6 +198,7 @@ export function LocalGroupsSettings(): ReactElement {
           </span>
         </div>
         {duplicate && <span className="settings-empty-text">{uiText('calendar.localGroups.duplicate')}</span>}
+      </div>
       </div>
     </Section>
   )
