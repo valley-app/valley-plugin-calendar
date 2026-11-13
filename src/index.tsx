@@ -6,7 +6,8 @@ import { CalendarFileView } from './FileView'
  * contracts and are mutated by their providers. The visible period and selected
  * day ride the shared time selection through `api.workspace.*TimeControl*`,
  * which also drives the dashboard timeframe takeover. The day window and
- * filters persist in plugin settings; groups come only from the app registry.
+ * filters persist in plugin settings; groups are the app registry's shared
+ * groups plus Calendar's own (`localGroups`, see `localGroups.ts`).
  *
  * Four views: `calendar.agenda` (left_sidebar — the chronological list),
  * `calendar.panel` (right_sidebar — the compact calendar), `calendar.page`

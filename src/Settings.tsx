@@ -10,6 +10,7 @@ import {
   useCalendarSettings,
 } from './settingsStore'
 import { NoteDatesSection } from './NoteDateSettings'
+import { LocalGroupsSettings } from './LocalGroupsSettings'
 import { uiText } from './localization'
 import { configureSource, useCalendarSourceProviders } from './itemSources'
 
@@ -88,6 +89,7 @@ function CalendarSection(): ReactElement {
         <Row title={uiText('calendar.files.folder')}><RealmFolderField value={calendarFolder('calendarFolder')} ariaLabel={uiText('calendar.files.folder')} onChange={() => {}} onCommit={value => void api.settings.set('calendarFolder', value)} /></Row>
       </Section>
       <GroupsSection />
+      <LocalGroupsSettings />
     </>
   )
 }

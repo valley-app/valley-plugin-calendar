@@ -2,6 +2,7 @@ import { React, api } from './runtime'
 import type { ValleyGroup } from '@valley/plugin-sdk/types'
 import { normalizeGroups } from '@valley/plugin-sdk/groups'
 import { globalGroups } from './groups'
+import { LOCAL_GROUPS_KEY, mergedGroups, normalizeLocalGroups, type CalendarGroup, type LocalGroup } from './localGroups'
 import { subscribeHostField } from './hooks'
 
 /**
@@ -9,8 +10,12 @@ import { subscribeHostField } from './hooks'
  * shared groups, filters, and the day window for the week grid.
  */
 export interface CalendarSettings {
-  /** The app-wide registry; Calendar never owns a second list. */
-  groups: ValleyGroup[]
+  /** The shared groups, then Calendar's own groups — what every picker, filter and colour reads. */
+  groups: CalendarGroup[]
+  /** The app-wide registry alone. */
+  sharedGroups: ValleyGroup[]
+  /** Groups only Calendar uses (`localGroups` in Calendar's settings). */
+  localGroups: LocalGroup[]
   /**
    * The hours the week grid opens on. A *default* window, not a clamp: an item
    * that starts before `dayStartHour` or ends after `dayEndHour` still renders,
@@ -78,8 +83,12 @@ function asDayEndHour(value: unknown, startHour: number): number {
 export function readCalendarSettings(): CalendarSettings {
   const s = api.settings.get()
   const dayStartHour = asHour(s.dayStartHour, DEFAULT_DAY_START_HOUR)
+  const sharedGroups = normalizeGroups(globalGroups())
+  const localGroups = normalizeLocalGroups(s[LOCAL_GROUPS_KEY], sharedGroups)
   return {
-    groups: normalizeGroups(globalGroups()),
+    groups: mergedGroups(sharedGroups, localGroups),
+    sharedGroups,
+    localGroups,
     dayStartHour,
     dayEndHour: asDayEndHour(s.dayEndHour, dayStartHour),
     hiddenGroups: asStringArray(s.hiddenGroups),

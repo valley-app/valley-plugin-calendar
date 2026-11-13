@@ -15,6 +15,8 @@ import { listSourcedItems, sourceDescriptors, sourcedItemActions, updateSourcedI
 import { calendarEditRequestStore, eventToItem, sourcedToItem, requestCalendarItemEdit, type CalItem } from './items'
 import { addDays, daysBetween } from './dateMath'
 import { markExplicitCalendarNavigation } from './runtime'
+import { readCalendarSettings } from './settingsStore'
+import { resolveGroupId } from './localGroups'
 
 const resultText = { type: 'string', maxLength: 65536 }
 const resultBoolean = { type: 'boolean' }
@@ -315,7 +317,8 @@ export function registerCalendarCommands(api: ValleyPluginApi): () => void {
         const record = newEvent(title, day, {
           startTime: start ? timePart(start) : undefined,
           endTime: end ? timePart(end) : undefined,
-          groupId: group || undefined
+          // `--group` takes a group's id or its name, shared or one of Calendar's own.
+          groupId: resolveGroupId(group, readCalendarSettings().groups)
         })
         if (!(await rawAppend(record))) throw new Error('Failed to add event.')
         return {

@@ -12,8 +12,7 @@
  */
 import { React, api } from './runtime'
 import type { ReactElement, ReactNode } from 'react'
-import type { ValleyGroup } from '@valley/plugin-sdk/types'
-import { groupKey } from '@valley/plugin-sdk/groups'
+import { groupOfItem, isGroupHidden, type CalendarGroup } from './localGroups'
 import { paletteCssValue } from '@valley/plugin-sdk/palette'
 import type { CalItem } from './items'
 import { EVENTS_SOURCE_ID, NOTE_DATES_SOURCE_ID, providerSourceKey } from './settingsStore'
@@ -46,26 +45,13 @@ export function itemSourceId(item: CalItem): string {
 }
 
 /**
- * The group an item belongs to. Calendar events carry a `groupId`; everything
- * else references a group **by name**, which is how `@valley/plugin-sdk/groups` models it.
- */
-function groupOf(item: CalItem, groups: readonly ValleyGroup[]): ValleyGroup | undefined {
-  if (item.groupId) {
-    const byId = groups.find((g) => g.id === item.groupId)
-    if (byId) return byId
-  }
-  if (!item.group) return undefined
-  const key = groupKey(item.group)
-  return groups.find((g) => groupKey(g.name) === key)
-}
-
-/**
  * Apply both filters. An item with no group is never hidden by a group filter —
  * switching "Pixar" off must not quietly take every ungrouped todo with it.
+ * Switching a shared group off also hides Calendar's own groups under it.
  */
 export function visibleItems(
   items: readonly CalItem[],
-  groups: readonly ValleyGroup[],
+  groups: readonly CalendarGroup[],
   hiddenGroups: readonly string[],
   hiddenSources: readonly string[]
 ): CalItem[] {
@@ -75,8 +61,8 @@ export function visibleItems(
   return items.filter((item) => {
     if (hiddenSourceIds.has(itemSourceId(item))) return false
     if (hiddenGroupIds.size === 0) return true
-    const group = groupOf(item, groups)
-    return !group || !hiddenGroupIds.has(group.id)
+    const group = groupOfItem(item, groups)
+    return !group || !isGroupHidden(group, hiddenGroupIds)
   })
 }
 

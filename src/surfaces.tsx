@@ -6,6 +6,7 @@ import { React, api, takeExplicitCalendarNavigation } from './runtime'
 import { calendarItemKey, type CalItem } from './items'
 import { calendarLinkPatch, calendarLinkState, calendarViewMode, defaultTimeControl, saveCalendarViewMode } from './timeControl'
 import { onChanged } from './events'
+import { groupOfItem } from './localGroups'
 import { EVENTS_SOURCE_ID, HIDDEN_GROUPS_KEY, HIDDEN_SOURCES_KEY, NOTE_DATES_SOURCE_ID, readCalendarSettings, useCalendarSettings } from './settingsStore'
 import { uiText } from './localization'
 import { resolveCalendarTarget } from './commands'
@@ -312,6 +313,7 @@ function GroupProperties(): React.ReactElement {
 }
 
 function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkState }): React.ReactElement {
+  const { groups } = useCalendarSettings()
   const [selected, setSelected] = React.useState<CalItem | null>(null)
   const [error, setError] = React.useState('')
   React.useEffect(() => {
@@ -329,7 +331,8 @@ function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkS
   if (error) return <div className="right-panel-body" role="alert">{error}</div>
   if (!item) return <Overview view={view} />
   if (!selected) return <div className="right-panel-body">{uiText('calendar.overview.loading')}</div>
-  return <div className="right-panel-body props-info"><dl className="props-info-table">{(['title', 'date', 'endDate', 'startTime', 'endTime', 'group', 'note', 'filePath'] as const).filter((key) => selected[key]).map((key) => <div className="props-info-row" key={key}><dt className="props-info-key">{uiText(`calendar.field.${key}`)}</dt><dd className="props-info-value">{selected[key]}</dd></div>)}</dl></div>
+  const value = (key: 'title' | 'date' | 'endDate' | 'startTime' | 'endTime' | 'group' | 'note' | 'filePath'): string | undefined => key === 'group' ? groupOfItem(selected, groups)?.name ?? selected.group : selected[key]
+  return <div className="right-panel-body props-info"><dl className="props-info-table">{(['title', 'date', 'endDate', 'startTime', 'endTime', 'group', 'note', 'filePath'] as const).filter((key) => value(key)).map((key) => <div className="props-info-row" key={key}><dt className="props-info-key">{uiText(`calendar.field.${key}`)}</dt><dd className="props-info-value">{value(key)}</dd></div>)}</dl></div>
 }
 
 export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void {

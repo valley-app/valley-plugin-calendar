@@ -1,7 +1,7 @@
 import { useCalendarDocuments } from './calendarDocuments'
 import { React, api } from './runtime'
 import type { EventRecord, ValleyGroup } from '@valley/plugin-sdk/types'
-import { groupForName } from '@valley/plugin-sdk/groups'
+import { groupOfItem } from './localGroups'
 import { useCalendarYear } from './hooks'
 import { useNoteIndex } from './noteIndex'
 import { useCalendarSettings } from './settingsStore'
@@ -32,7 +32,7 @@ export interface CalendarItems {
   noteDates: NoteDateEntry[]
   /** Everything currently feeding the surface, for the sources filter. */
   sourceOptions: ItemSourceOption[]
-  /** Record totals for the shared group filter, keyed by group id. */
+  /** Record totals for the group filter, keyed by group id; a shared group's total includes its own subgroups. */
   groupCounts: Readonly<Record<string, number>>
   colorFor: (item: CalItem) => string
 }
@@ -160,10 +160,10 @@ export function useCalendarItems(opts: { focusYear?: number; filePath?: string }
   const groupCounts = React.useMemo<Readonly<Record<string, number>>>(() => {
     const counts: Record<string, number> = Object.fromEntries(calendarGroups.map((group) => [group.id, 0]))
     for (const item of baseItems) {
-      const group = item.groupId
-        ? calendarGroups.find((entry) => entry.id === item.groupId)
-        : groupForName(calendarGroups, item.group)
-      if (group) counts[group.id] = (counts[group.id] ?? 0) + 1
+      const group = groupOfItem(item, calendarGroups)
+      if (!group) continue
+      counts[group.id] = (counts[group.id] ?? 0) + 1
+      if (group.parent) counts[group.parent] = (counts[group.parent] ?? 0) + 1
     }
     return counts
   }, [baseItems, calendarGroups])

@@ -5,8 +5,9 @@ import { agendaStyles } from './styles/agenda'
 import { weekGridStyles } from './styles/weekGrid'
 import { headerFilterStyles, inlineFilterStyles } from './styles/filters'
 import { integrationStyles, noteDateStyles } from './styles/settings'
+import { groupListStyles } from './styles/groups'
 
-export const calendarCss = calendarStyles + eventEditorStyles + itemStyles + agendaStyles + weekGridStyles + headerFilterStyles + integrationStyles + inlineFilterStyles + noteDateStyles
+export const calendarCss = calendarStyles + eventEditorStyles + itemStyles + agendaStyles + weekGridStyles + headerFilterStyles + integrationStyles + inlineFilterStyles + noteDateStyles + groupListStyles
 
 
 const STYLE_ID = "notes-calendar-styles"

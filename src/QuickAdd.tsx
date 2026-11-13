@@ -113,7 +113,7 @@ function Row({ glyph, children }: { glyph: ReactNode; children: ReactNode }): Re
 
 interface QuickAddProps {
   state: QuickAddState
-  groups: import('@valley/plugin-sdk/types').ValleyGroup[]
+  groups: import('./localGroups').CalendarGroup[]
   onClose: () => void
   onAdded: () => void
   fileEditor?: CalendarFileEditor
@@ -196,7 +196,7 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
   // name is derived at submit time, where the contributed-item contract wants it.
   const [groupId, setGroupId] = useEventField(draftKey, 'groupId', () => {
     const stored = editing?.event?.groupId ?? editing?.sourced?.group ?? ''
-    return groups.find((g) => g.id === stored)?.id ?? groups.find((g) => g.name === stored)?.id ?? ''
+    return groups.find((g) => g.id === stored)?.id ?? groups.find((g) => !g.local && g.name === stored)?.id ?? ''
   })
   const [location, setLocation] = useEventField<EventLocation | undefined>(draftKey, 'location', editing?.location)
   const [note, setNote] = useEventField(draftKey, 'note', editing?.note ?? '')
@@ -292,8 +292,9 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
       const now = new Date().toISOString()
       const day = date || state.date
       // A contributed item references its group by **name** — how `@valley/plugin-sdk/groups`
-      // models it, and what `CalendarSourceItem.group` documents.
-      const groupName = groups.find((g) => g.id === groupId)?.name
+      // models it, and what `CalendarSourceItem.group` documents. Only a shared group
+      // can be handed over: Calendar's own groups mean nothing to another plugin.
+      const groupName = groups.find((g) => g.id === groupId && !g.local)?.name
       const shared = {
         location,
         urls: editing?.file ? urls : urls.length > 0 ? urls : undefined,
@@ -414,6 +415,7 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
   })
 
   const isEvent = kind === 'event'
+  const pickableGroups = isEvent ? groups : groups.filter((g) => !g.local)
   const kindLabel = (id: string): string =>
     id === 'event'
       ? uiText('auto.ad8919ace091')
@@ -504,16 +506,16 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
           <button className="calendar-quickadd-add" type="button" aria-expanded={details} onClick={() => setDetails(!details)}>{uiText('calendar.quickadd.details')}</button>
           <div hidden={!details}>
           <div className="calendar-quickadd-section">
-            {groups.length > 0 && !editing?.file && !state.sourceFilePath && (
+            {pickableGroups.length > 0 && !editing?.file && !state.sourceFilePath && (
               <Row glyph={<Tags />}>
                 <SelectField
                   className="calendar-quickadd-select"
-                  value={groupId}
+                  value={pickableGroups.some((g) => g.id === groupId) ? groupId : ''}
                   onChange={setGroupId}
                   ariaLabel={uiText('auto.dbed7864623f')}
                   options={[
                     { value: '', label: uiText('auto.f6b2246c64fa') },
-                    ...groups.map((g) => ({ value: g.id, label: g.name, color: g.color }))
+                    ...pickableGroups.map((g) => ({ value: g.id, label: g.name, color: g.color }))
                   ]}
                 />
               </Row>

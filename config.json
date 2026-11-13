@@ -2985,6 +2985,53 @@
         "labelKey": "auto.c46325ccec8f"
       },
       {
+        "key": "localGroups",
+        "label": "Calendar groups",
+        "type": "custom",
+        "settingsVisible": false,
+        "schema": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "color": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "aliases": {
+                "type": "array",
+                "maxItems": 20,
+                "items": {
+                  "type": "string",
+                  "maxLength": 60
+                }
+              },
+              "parent": {
+                "type": "string",
+                "maxLength": 128
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "color"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "default": [],
+        "labelKey": "calendar.localGroups.setting"
+      },
+      {
         "key": "reminderOffsets",
         "label": "Reminder offsets in minutes",
         "type": "custom",
