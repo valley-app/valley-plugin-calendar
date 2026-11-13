@@ -32,7 +32,7 @@ export interface CalendarItems {
   noteDates: NoteDateEntry[]
   /** Everything currently feeding the surface, for the sources filter. */
   sourceOptions: ItemSourceOption[]
-  /** Record totals for the group filter, keyed by group id; a shared group's total includes its own subgroups. */
+  /** Record totals for the group filter, keyed by group id. */
   groupCounts: Readonly<Record<string, number>>
   colorFor: (item: CalItem) => string
 }
@@ -163,7 +163,6 @@ export function useCalendarItems(opts: { focusYear?: number; filePath?: string }
       const group = groupOfItem(item, calendarGroups)
       if (!group) continue
       counts[group.id] = (counts[group.id] ?? 0) + 1
-      if (group.parent) counts[group.parent] = (counts[group.parent] ?? 0) + 1
     }
     return counts
   }, [baseItems, calendarGroups])

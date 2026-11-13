@@ -1,8 +1,7 @@
 /**
  * Calendar's own groups in Settings: the same list as Settings → Appearance →
  * Groups (grip, name, colour, usage, remove, and an add row on the same
- * columns), plus the shared group each one sits under. A group is deleted only
- * once no event uses it, like a shared group.
+ * columns). A group is deleted only once no event uses it, like a shared group.
  */
 import { React, api } from './runtime'
 import type { ReactElement } from 'react'
@@ -77,12 +76,11 @@ function NameInput({ initial, placeholder, ariaLabel, invalid, onType, onCommit,
 }
 
 export function LocalGroupsSettings(): ReactElement {
-  const { Button, ColorField, IconButton, Section, SelectField, useReorderDrag } = api.ui.settings
-  const { sharedGroups: shared, localGroups: local, groups } = useCalendarSettings()
+  const { Button, ColorField, IconButton, Section, useReorderDrag } = api.ui.settings
+  const { localGroups: local, groups } = useCalendarSettings()
   const usage = localGroupUsage(useEvents(), local)
   const [draftName, setDraftName] = React.useState('')
   const [draftColor, setDraftColor] = React.useState(() => nextGroupColor(groups))
-  const [draftParent, setDraftParent] = React.useState('')
   const [addKey, setAddKey] = React.useState(0)
   const [duplicate, setDuplicate] = React.useState(false)
   const [saveError, setSaveError] = React.useState(false)
@@ -106,26 +104,18 @@ export function LocalGroupsSettings(): ReactElement {
     const name = draftName.trim().slice(0, LOCAL_GROUP_NAME_MAX)
     if (!name || local.length >= LOCAL_GROUP_LIMIT) return
     if (taken(name)) { setDuplicate(true); return }
-    const created: LocalGroup = { id: newLocalGroupId(), name, color: draftColor, ...(draftParent ? { parent: draftParent } : {}) }
+    const created: LocalGroup = { id: newLocalGroupId(), name, color: draftColor }
     if (!await save([...local, created])) return
     setDraftName('')
     setDuplicate(false)
     setDraftColor(nextGroupColor([...groups, created]))
     setAddKey((key) => key + 1)
   }
-  const parentOptions = [
-    { value: '', label: uiText('calendar.localGroups.noParent') },
-    ...shared.map((group) => ({ value: group.id, label: group.name, color: group.color }))
-  ]
-  const parentPatch = (value: string) => (group: LocalGroup): LocalGroup => {
-    const { parent: _, ...rest } = group
-    return value ? { ...rest, parent: value } : rest
-  }
 
   return (
     <Section title={uiText('calendar.localGroups.title')}>
       <span className="settings-empty-text">{uiText('calendar.localGroups.description')}</span>
-      <div className="settings-colorrules settings-groups settings-groups--parent" role="list" aria-label={uiText('calendar.localGroups.title')}>
+      <div className="settings-colorrules settings-groups" role="list" aria-label={uiText('calendar.localGroups.title')}>
         {saveError && <span role="alert" className="settings-path-error">{uiText('calendar.localGroups.saveError')}</span>}
         {local.map((group, index) => {
           // Host-drawn controls are matched to their slot, so a moved row
@@ -152,13 +142,6 @@ export function LocalGroupsSettings(): ReactElement {
                   if (!name || name === group.name || taken(name, group.id)) return
                   update(group.id, (current) => renameLocalGroup(current, name))
                 }}
-              />
-              <SelectField
-                key={`parent:${slot}`}
-                value={group.parent ?? ''}
-                options={parentOptions}
-                ariaLabel={uiText('calendar.localGroups.parentOf', { p0: group.name })}
-                onChange={(value) => update(group.id, parentPatch(value))}
               />
               <ColorField
                 key={`color:${slot}`}
@@ -197,13 +180,6 @@ export function LocalGroupsSettings(): ReactElement {
             onCommit={(value) => setDraftName(value)}
             onEnter={() => void add()}
           />
-          <SelectField
-            key={`add-parent:${addKey}`}
-            value={draftParent}
-            options={parentOptions}
-            ariaLabel={uiText('calendar.localGroups.newParent')}
-            onChange={setDraftParent}
-          />
           <ColorField
             key={`add-color:${addKey}`}
             value={draftColor}
@@ -212,7 +188,7 @@ export function LocalGroupsSettings(): ReactElement {
           />
           <span className="settings-colorrule-add-action">
             <span className="settings-button settings-button--medium settings-colorrule-add-sizer" aria-hidden="true">{uiText('calendar.localGroups.add')}</span>
-            <Button className="settings-colormap-add-btn" disabled={!draftName.trim() || local.length >= LOCAL_GROUP_LIMIT} onClick={() => void add()}>
+            <Button className="settings-colormap-add-btn" disabled={local.length >= LOCAL_GROUP_LIMIT} onClick={() => void add()}>
               {uiText('calendar.localGroups.add')}
             </Button>
           </span>

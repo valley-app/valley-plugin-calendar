@@ -4,9 +4,9 @@
  *
  * They live in Calendar's plugin settings under `localGroups`, in the same shape
  * To-Do uses for its own groups. An event references one by its `local-…` id in
- * the ordinary `groupId` field. An own group may sit under a shared group
- * (`parent`), so switching that shared group off in a filter switches its own
- * subgroups off too. Other plugins never see these groups: items they contribute
+ * the ordinary `groupId` field. An own group is a plain group, edited like the
+ * shared ones; it never sits under a shared group (a `parent` saved by 3.3.17 is
+ * dropped on read). Other plugins never see these groups: items they contribute
  * still resolve by name against the shared groups only.
  */
 import type { ValleyGroup } from '@valley/plugin-sdk/types'
@@ -17,16 +17,12 @@ export interface LocalGroup {
   name: string
   color: string
   aliases?: string[]
-  /** The shared group this one sits under. */
-  parent?: string
 }
 
 /** A group as Calendar's pickers, filters and colours see it. */
 export interface CalendarGroup extends ValleyGroup {
   /** Set on Calendar's own groups. */
   local?: true
-  /** The shared group an own group sits under. */
-  parent?: string
 }
 
 export const LOCAL_GROUPS_KEY = 'localGroups'
@@ -47,7 +43,6 @@ export function isLocalGroupId(id: string | undefined): boolean {
 export function normalizeLocalGroups(value: unknown, shared: readonly ValleyGroup[] = []): LocalGroup[] {
   if (!Array.isArray(value)) return []
   const taken = new Set(shared.flatMap((group) => [group.name, ...(group.aliases ?? [])]).map(groupKey))
-  const sharedIds = new Set(shared.map((group) => group.id))
   const ids = new Set<string>()
   const out: LocalGroup[] = []
   for (const entry of value) {
@@ -60,11 +55,10 @@ export function normalizeLocalGroups(value: unknown, shared: readonly ValleyGrou
     const aliases = Array.isArray(raw.aliases)
       ? [...new Set(raw.aliases.map((alias) => clean(alias, LOCAL_GROUP_NAME_MAX)).filter((alias) => alias && groupKey(alias) !== groupKey(name) && !taken.has(groupKey(alias))))].slice(0, 20)
       : []
-    const parent = typeof raw.parent === 'string' && sharedIds.has(raw.parent) ? raw.parent : undefined
     ids.add(id)
     taken.add(groupKey(name))
     aliases.forEach((alias) => taken.add(groupKey(alias)))
-    out.push({ id, name, color, ...(aliases.length ? { aliases } : {}), ...(parent ? { parent } : {}) })
+    out.push({ id, name, color, ...(aliases.length ? { aliases } : {}) })
     if (out.length >= LOCAL_GROUP_LIMIT) break
   }
   return out
@@ -87,8 +81,7 @@ export function mergedGroups(shared: readonly ValleyGroup[], local: readonly Loc
       name: group.name,
       color: group.color,
       local: true,
-      ...(group.aliases ? { aliases: group.aliases } : {}),
-      ...(group.parent ? { parent: group.parent } : {})
+      ...(group.aliases ? { aliases: group.aliases } : {})
     }))
   ]
 }
@@ -107,11 +100,6 @@ export function groupOfItem(item: { groupId?: string; group?: string }, groups: 
   const key = groupKey(item.group ?? '')
   if (!key) return undefined
   return groups.find((group) => !group.local && (groupKey(group.name) === key || (group.aliases ?? []).some((alias) => groupKey(alias) === key)))
-}
-
-/** An own group is off when it is switched off itself or when the shared group it sits under is. */
-export function isGroupHidden(group: CalendarGroup, hidden: ReadonlySet<string>): boolean {
-  return hidden.has(group.id) || Boolean(group.parent && hidden.has(group.parent))
 }
 
 /** The id an event should store for a group given by id or by name; unknown values are kept as given. */

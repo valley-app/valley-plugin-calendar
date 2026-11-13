@@ -7,20 +7,16 @@
  */
 export const groupListStyles = `/* Groups lists: the shared Groups editor and every plugin's own-group editor.
    One grid holds the rows and the add row, so their columns line up: grip, name,
-   (parent), colour, usage count, remove. The add row's action spans the usage and
+   colour, usage count, remove. The add row's action spans the usage and
    remove columns, so its edges meet theirs whatever the label's length. The grip
    hangs 5px into the gutter like every reorder handle in Settings, so its column
    is 11px and the name keeps its place. */
 .settings-colorrules.settings-groups {
   display: grid;
-  grid-template-columns: 11px minmax(0, 1fr) 20px auto 28px;
+  grid-template-columns: 11px minmax(0, 1fr) 20px minmax(calc(2.2 * var(--smaller-font-size)), auto) 28px;
   gap: var(--space-2);
   align-items: center;
   margin-top: var(--space-2);
-}
-
-.settings-colorrules.settings-groups.settings-groups--parent {
-  grid-template-columns: 11px minmax(0, 2fr) minmax(0, 1fr) 20px auto 28px;
 }
 
 .settings-groups > * {
@@ -84,6 +80,12 @@ export const groupListStyles = `/* Groups lists: the shared Groups editor and ev
   color: var(--text-tertiary);
   font-size: 1.1rem;
   cursor: pointer;
+}
+
+/* A plugin's glyph is mirrored into the host button as its own box: an inline
+   svg leaves descender space under it and sits above the centre. */
+.settings-colormap-remove svg {
+  display: block;
 }
 
 .settings-groups > .settings-colorrule-row > .settings-colorrule-add-action {

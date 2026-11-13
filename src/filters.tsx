@@ -12,7 +12,7 @@
  */
 import { React, api } from './runtime'
 import type { ReactElement, ReactNode } from 'react'
-import { groupOfItem, isGroupHidden, type CalendarGroup } from './localGroups'
+import { groupOfItem, type CalendarGroup } from './localGroups'
 import { paletteCssValue } from '@valley/plugin-sdk/palette'
 import type { CalItem } from './items'
 import { EVENTS_SOURCE_ID, NOTE_DATES_SOURCE_ID, providerSourceKey } from './settingsStore'
@@ -62,7 +62,7 @@ export function visibleItems(
     if (hiddenSourceIds.has(itemSourceId(item))) return false
     if (hiddenGroupIds.size === 0) return true
     const group = groupOfItem(item, groups)
-    return !group || !isGroupHidden(group, hiddenGroupIds)
+    return !group || !hiddenGroupIds.has(group.id)
   })
 }
 
