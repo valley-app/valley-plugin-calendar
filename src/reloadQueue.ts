@@ -2,10 +2,17 @@ import { createBoundedCache, type ValleyPluginApi } from '@valley/plugin-sdk'
 
 const REVISION_CACHE_MAX_BYTES = 16 * 1024 * 1024
 
-/** The host refused the read because this plugin is being disabled, enabled or replaced: its view goes away, nothing failed. */
+/**
+ * The host refused the read because this plugin is being disabled, enabled or replaced, or answered a read that arrived after
+ * the plugin's session was released ("Plugin session is invalid or expired": datasets add code permission-denied, drivers no
+ * code, so the released session is matched by that exact message). Its view goes away or is remounted; nothing failed, and
+ * the read is dropped, not retried: a retry would reach the same closed or fenced session, and the next view reloads anew.
+ */
 export function isLifecycleRefusal(error: unknown): boolean {
   const value = error as { code?: unknown; message?: unknown } | null
-  return value?.code === 'PLUGIN_LIFECYCLE_CHANGE' || typeof value?.message === 'string' && value.message.includes('preparing its lifecycle change')
+  if (value?.code === 'PLUGIN_LIFECYCLE_CHANGE') return true
+  if (typeof value?.message !== 'string') return false
+  return value.message.includes('preparing its lifecycle change') || value.message === 'Plugin session is invalid or expired'
 }
 
 export function createReloadQueue<T>(read: () => Promise<T>, publish: (value: T) => void, onError?: (error: unknown) => void): {

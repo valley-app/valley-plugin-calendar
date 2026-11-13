@@ -197,6 +197,29 @@ it('stays quiet when a reload is refused because the plugin is being disabled or
   expect(publish).toHaveBeenCalledWith(['fern'])
 })
 
+it('stays quiet when a reload reaches main after the plugin session was released', async () => {
+  // Main answers a request of a closed session this way (datasets with code permission-denied, drivers without a code).
+  const dataset = Object.assign(new Error('Plugin session is invalid or expired'), { code: 'permission-denied' })
+  const driver = new Error('Plugin session is invalid or expired')
+  const read = vi.fn().mockRejectedValueOnce(dataset).mockRejectedValueOnce(driver).mockResolvedValue(['fern'])
+  const publish = vi.fn()
+  const report = vi.fn()
+  const queue = createReloadQueue(read, publish, report)
+  await queue.reload().catch(() => undefined)
+  await queue.reload().catch(() => undefined)
+  await queue.reload()
+  expect(report).not.toHaveBeenCalled()
+  expect(publish).toHaveBeenCalledWith(['fern'])
+})
+
+it('still reports a permission denial that is not a released session', async () => {
+  const denied = Object.assign(new Error('Calendar may not read this dataset'), { code: 'permission-denied' })
+  const report = vi.fn()
+  const queue = createReloadQueue(vi.fn().mockRejectedValue(denied), vi.fn(), report)
+  await queue.reload().catch(() => undefined)
+  await waitFor(() => expect(report).toHaveBeenCalledWith(denied))
+})
+
 it('keeps settled ranges shared across views and ignores navigation and unrelated datasets', async () => {
   const mock = createMockValleyApi({ manifest: { id: 'calendar' }, datasets: {
     'calendar.events': [{ id: 'fern', title: 'Fern', date: '2026-08-24' }]
