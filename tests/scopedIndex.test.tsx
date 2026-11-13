@@ -91,3 +91,22 @@ it('keeps a resumed StrictMode observation shared with later surfaces', async ()
   await waitFor(() => expect(second.result.current).toBe(first.result.current))
   expect(observe).toHaveBeenCalledTimes(observations)
 })
+
+it('keeps the note index readable when the host refuses its observation during a lifecycle change', async () => {
+  const mock = createMockValleyApi({ manifest: { id: 'calendar', indexState: 'scoped' }, indexEntries: [note(1)] })
+  cleanups.push(initRuntime(mock.api))
+  vi.spyOn(mock.api.index, 'observe').mockRejectedValue(Object.assign(new Error('Plugin session is preparing its lifecycle change'), { code: 'PLUGIN_LIFECYCLE_CHANGE' }))
+  const view = renderHook(() => useNoteIndex([source]))
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+  // The view is about to be removed or remounted by the change; a refusal is not an index failure the view throws.
+  expect(view.result.current).toEqual([])
+})
+
+it('still fails visibly when the index observation fails for another reason', async () => {
+  const mock = createMockValleyApi({ manifest: { id: 'calendar', indexState: 'scoped' }, indexEntries: [note(1)] })
+  cleanups.push(initRuntime(mock.api))
+  vi.spyOn(mock.api.index, 'observe').mockRejectedValue(new Error('Index store is corrupt'))
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const view = renderHook(() => useNoteIndex([source]))
+  await waitFor(() => expect(view.result.error?.message ?? (errors.mock.calls.flat().find((arg: unknown) => arg instanceof Error) as Error | undefined)?.message).toBe('Index store is corrupt'))
+})

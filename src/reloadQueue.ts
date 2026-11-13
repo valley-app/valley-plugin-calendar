@@ -3,7 +3,7 @@ import { createBoundedCache, type ValleyPluginApi } from '@valley/plugin-sdk'
 const REVISION_CACHE_MAX_BYTES = 16 * 1024 * 1024
 
 /** The host refused the read because this plugin is being disabled, enabled or replaced: its view goes away, nothing failed. */
-function isLifecycleRefusal(error: unknown): boolean {
+export function isLifecycleRefusal(error: unknown): boolean {
   const value = error as { code?: unknown; message?: unknown } | null
   return value?.code === 'PLUGIN_LIFECYCLE_CHANGE' || typeof value?.message === 'string' && value.message.includes('preparing its lifecycle change')
 }

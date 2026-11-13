@@ -1,6 +1,7 @@
 import { createIndexObserver, type PluginIndexEntry, type PluginIndexScope, type PluginIndexSnapshot } from '@valley/plugin-sdk'
 import { React, readOwner } from './runtime'
 import type { NoteDateSource, NoteDateIndexEntry } from './noteDates'
+import { isLifecycleRefusal } from './reloadQueue'
 
 interface NoteIndexStore {
   get(): NoteDateIndexEntry[]
@@ -52,7 +53,9 @@ function owners() {
         refresh()
       }
       const store = {
-        get: () => { if (snapshot.status === 'error') throw new Error(snapshot.error ?? 'Calendar note index is unavailable.'); return entries },
+        // A refused observation (the plugin is being disabled, enabled or replaced) keeps the last entries: the view is removed
+        // or remounted by the change; the SDK observer reports it as a message only, so it is matched by message.
+        get: () => { if (snapshot.status === 'error' && !isLifecycleRefusal({ message: snapshot.error })) throw new Error(snapshot.error ?? 'Calendar note index is unavailable.'); return entries },
         subscribe(listener: () => void) {
           if (!stores.has(key)) stores.set(key, store)
           listeners.add(listener)
