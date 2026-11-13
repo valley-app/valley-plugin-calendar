@@ -107,6 +107,6 @@ it('still fails visibly when the index observation fails for another reason', as
   cleanups.push(initRuntime(mock.api))
   vi.spyOn(mock.api.index, 'observe').mockRejectedValue(new Error('Index store is corrupt'))
   const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-  const view = renderHook(() => useNoteIndex([source]))
-  await waitFor(() => expect(view.result.error?.message ?? (errors.mock.calls.flat().find((arg: unknown) => arg instanceof Error) as Error | undefined)?.message).toBe('Index store is corrupt'))
+  renderHook(() => useNoteIndex([source]))
+  await waitFor(() => expect(errors.mock.calls.flat().some((arg: unknown) => arg instanceof Error && arg.message === 'Index store is corrupt')).toBe(true))
 })
