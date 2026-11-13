@@ -1,11 +1,25 @@
 export const agendaStyles = `/* ── Agenda panel header actions ────────────────────────────────────────────── */
 .agenda-header-actions { display:inline-flex; align-items:center; gap:5px; }
-.agenda-today-btn { display:inline-flex; align-items:center;
-  padding:3px 8px; font-size:0.6875rem; font-weight:600; cursor:pointer; border-radius:5px;
-  border:1px solid var(--accent-color); background:var(--accent-tint-bg);
-  color:var(--accent-tint-text); -webkit-app-region:no-drag;
-  transition:opacity 0.15s; }
-.agenda-today-btn:hover { opacity:0.8; }
+.agenda-today-btn { display:inline-flex; align-items:center; height:var(--shell-control-toolbar, 26px);
+  padding:0 8px; font:inherit; font-size:var(--small-font-size); font-weight:var(--font-semi-bold); cursor:pointer;
+  border:none; border-radius:var(--shell-control-radius, var(--radius-sm)); background:var(--accent-tint-bg);
+  color:var(--title-color); -webkit-app-region:no-drag; }
+.agenda-today-btn:hover { background:var(--hover-bg); }
+
+/* Sources, groups and note dates: a row of icon segments that opens one list
+   inline, selected like the Properties segment switcher. */
+.agenda-filter-bar { display:flex; align-items:center; gap:var(--space-1); flex:0 0 auto; height:var(--app-bar-height); box-sizing:border-box;
+  padding:0 var(--space-2); border-bottom:1px solid var(--border-light); }
+.agenda-filter-seg { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; padding:0;
+  width:var(--shell-control-action, 28px); height:var(--shell-control-toolbar, 26px); border:none;
+  border-radius:var(--shell-control-radius, var(--radius-sm)); background:transparent; color:var(--text-secondary); cursor:pointer; }
+.agenda-filter-seg:hover { background:var(--hover-bg); color:var(--text-color); }
+.agenda-filter-seg.filtered { color:var(--accent-color); }
+.agenda-filter-seg.active { background:var(--accent-tint-bg); color:var(--title-color); }
+.agenda-filter-seg svg { width:var(--shell-glyph-medium, 16px); height:var(--shell-glyph-medium, 16px); }
+.agenda-filter-panel { flex:0 0 auto; max-height:45%; overflow:auto; padding:calc(var(--space-3) / 2); border-bottom:1px solid var(--border-light); }
+.agenda-filter-panel-noteDates { padding:0; }
+.agenda-filter-panel .calendar-filter-list { max-height:none; overflow:visible; }
 
 /* ── Agenda panel (left sidebar) ─────────────────────────────────────────── */
 .calendar-agenda-panel { width: 100%; height: 100%; min-height: 0; }

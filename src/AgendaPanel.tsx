@@ -1,4 +1,3 @@
-import { openDailyNote } from './dailyNotes'
 /**
  * Agenda — a flat chronological list of every event and todo (anything with a
  * date), grouped into per-day sections sorted newest→oldest. The Calendar
@@ -8,20 +7,21 @@ import { openDailyNote } from './dailyNotes'
  * It tracks the shared Calendar selection (via the SDK time-control surface).
  * Clicking a card reveals its date and position in the main Calendar.
  */
-import { React, api, revealTargetStore } from './runtime'
+import { React, api, isOwnCalendarSelection, markCalendarSelectionOrigin, revealTargetStore } from './runtime'
 import { selectCalendarProperties, useCalendarSurface } from './surfaces'
 import type { ReactElement } from 'react'
 import { useTimeControl } from './timeControl'
 import { useCalendarItems } from './useCalendarItems'
 import { HIDDEN_GROUPS_KEY, HIDDEN_SOURCES_KEY, useCalendarSettings } from './settingsStore'
-import { CalendarFilterButton, NoteDateSourceFilterList } from './filters'
+import { CalendarFilterList, NoteDateSourceFilterList } from './filters'
+import { useNoteDateSources } from './noteDateStore'
 import {
   CalendarAgendaCard,
   calendarItemMenuItems,
   openItemInCalendarMain,
   type CalItem
 } from './items'
-import { CalendarDays, GroupGlyph, Layers, Search, X } from './icons'
+import { GroupGlyph, Layers, PushPin, Search, X } from './icons'
 import { localizedMonth, localizedWeekday, parseLocalDate } from './dateMath'
 import { uiText } from './localization'
 import { QuickAdd, type QuickAddState } from './QuickAdd'
@@ -45,6 +45,8 @@ function isoDay(d: Date): string {
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
+
+type AgendaFilterPanel = 'sources' | 'groups' | 'noteDates'
 
 export function AgendaPanel(): ReactElement {
   const today = new Date()
@@ -70,13 +72,15 @@ export function AgendaPanel(): ReactElement {
   const didInitialScroll = React.useRef(false)
   const [todayVisible, setTodayVisible] = React.useState(true)
   const [search, setSearch] = React.useState('')
+  const [filterPanel, setFilterPanel] = React.useState<AgendaFilterPanel | null>(null)
+  const noteDateSources = useNoteDateSources()
   const [quickAdd, setQuickAddState] = React.useState<QuickAddState | null>(null)
   const anchor = React.useRef({ x: 24, y: 76 })
   const setQuickAdd = (value: QuickAddState | null): void => setQuickAddState(value ? { ...value, anchor: anchor.current } : null)
 
   const selectItem = React.useCallback((item: CalItem): void => {
     selectCalendarProperties(item, 'left_sidebar')
-    openItemInCalendarMain(item)
+    openItemInCalendarMain(item, 'left_sidebar')
   }, [])
 
   const editItem = React.useCallback((item: CalItem, newTab?: boolean): void => {
@@ -177,7 +181,8 @@ export function AgendaPanel(): ReactElement {
   }, [days, show, todayKey])
 
   React.useEffect(() => {
-    if (tc.selectedDate) showDay(tc.selectedDate)
+    // A date picked here (a day header or a card) stays where it was clicked; only selections made elsewhere scroll.
+    if (tc.selectedDate && !isOwnCalendarSelection('left_sidebar', tc)) showDay(tc.selectedDate)
   }, [showDay, tc.selectedDate])
 
   React.useEffect(() => {
@@ -217,6 +222,12 @@ export function AgendaPanel(): ReactElement {
     if (days.includes(todayKey)) showDay(todayKey)
   }
 
+  const filterSegments: { id: AgendaFilterPanel; label: string; icon: ReactElement; filtered: boolean }[] = [
+    { id: 'sources', label: uiText('calendar.filter.sources'), icon: <Layers />, filtered: sourceOptions.some((source) => hiddenSources.includes(source.id)) },
+    { id: 'groups', label: uiText('calendar.filter.groups'), icon: <GroupGlyph />, filtered: calendarGroups.some((group) => hiddenGroups.includes(group.id)) },
+    { id: 'noteDates', label: uiText('calendar.filter.noteDates'), icon: <PushPin />, filtered: noteDateSources.some((source) => !source.hidden && !source.visible) }
+  ]
+
   const openItemMenu = async (item: CalItem, e: React.MouseEvent): Promise<void> => {
     e.preventDefault()
     e.stopPropagation()
@@ -230,24 +241,6 @@ export function AgendaPanel(): ReactElement {
       <div className="panel-header">
         <span className="panel-title">{uiText('auto.891e9d6d47f1')}</span>
         <div className="agenda-header-actions">
-          <button className="agenda-today-btn" title={uiText('calendar.daily.open')} aria-label={uiText('calendar.daily.open')} onClick={(e) => { void openDailyNote(tc.selectedDate ?? todayKey, undefined, true, api.ui.hasModKey(e)) }}><CalendarDays /></button>
-          <CalendarFilterButton
-            label={uiText('calendar.filter.sources')}
-            icon={<Layers />}
-            options={sourceOptions.map((source) => ({ ...source, color: 'palette:primary-blue' }))}
-            hidden={hiddenSources}
-            settingsKey={HIDDEN_SOURCES_KEY}
-            emptyText={uiText('calendar.filter.noSources')}
-          />
-          <CalendarFilterButton
-            label={uiText('calendar.filter.groups')}
-            icon={<GroupGlyph />}
-            options={calendarGroups.map((group) => ({ id: group.id, label: group.name, color: group.color, count: groupCounts[group.id] ?? 0 }))}
-            hidden={hiddenGroups}
-            settingsKey={HIDDEN_GROUPS_KEY}
-            emptyText={uiText('calendar.filter.noGroups')}
-            onOpenSettings={() => api.workspace.openOwnSettings()}
-          />
           {!todayVisible && (
             <button className="agenda-today-btn" onClick={scrollToToday}>
               {uiText('auto.24345a14377f')}</button>
@@ -260,7 +253,37 @@ export function AgendaPanel(): ReactElement {
           />
         </div>
       </div>
-      <NoteDateSourceFilterList collapsible />
+      <div className="agenda-filter-bar">
+        {filterSegments.map(({ id, label, icon, filtered }) => (
+          <button
+            key={id}
+            type="button"
+            className={`agenda-filter-seg${filterPanel === id ? ' active' : ''}${filtered ? ' filtered' : ''}`}
+            aria-pressed={filterPanel === id}
+            aria-label={label}
+            title={label}
+            onClick={() => setFilterPanel((open) => open === id ? null : id)}
+          >{icon}</button>
+        ))}
+      </div>
+      {filterPanel && <div className={`agenda-filter-panel agenda-filter-panel-${filterPanel}`}>
+        {filterPanel === 'sources' && <CalendarFilterList
+          label={uiText('calendar.filter.sources')}
+          options={sourceOptions.map((source) => ({ ...source, color: 'palette:primary-blue' }))}
+          hidden={hiddenSources}
+          settingsKey={HIDDEN_SOURCES_KEY}
+          emptyText={uiText('calendar.filter.noSources')}
+        />}
+        {filterPanel === 'groups' && <CalendarFilterList
+          label={uiText('calendar.filter.groups')}
+          options={calendarGroups.map((group) => ({ id: group.id, label: group.name, color: group.color, count: groupCounts[group.id] ?? 0 }))}
+          hidden={hiddenGroups}
+          settingsKey={HIDDEN_GROUPS_KEY}
+          emptyText={uiText('calendar.filter.noGroups')}
+          onOpenSettings={() => api.workspace.openOwnSettings()}
+        />}
+        {filterPanel === 'noteDates' && <NoteDateSourceFilterList />}
+      </div>}
       <div className="search-field-row">
         <div className="agenda-search search-field">
           <Search className="search-field-icon" />
@@ -307,7 +330,10 @@ export function AgendaPanel(): ReactElement {
                 <button
                   type="button"
                   className={`agenda-day-header${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}`}
-                  onClick={() => patch({ selectedDate: key, rangeStart: null, rangeEnd: null })}
+                  onClick={() => {
+                    markCalendarSelectionOrigin({ surface: 'left_sidebar', selectedDate: key, selectedTime: tc.selectedTime ?? null })
+                    patch({ selectedDate: key, rangeStart: null, rangeEnd: null })
+                  }}
                 >
                   <span className="agenda-day-dow">{localizedWeekday(date.getDay(), api.ui.language())}</span>
                   <span className="agenda-day-num">{date.getDate()}</span>

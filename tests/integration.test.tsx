@@ -1191,6 +1191,21 @@ describe('Calendar item clicks', () => {
     flushTimeControl()
   })
 
+  it('keeps the clicked week grid scrolled where it was while the Agenda follows the item', async () => {
+    render(React.createElement(Calendar))
+    await screen.findByRole('heading', { name: /W24\s+2026/i })
+    const body = document.querySelector<HTMLElement>('.calendar-weekgrid-body')!
+    const scrollTo = vi.fn()
+    body.scrollTo = scrollTo as unknown as typeof body.scrollTo
+    fireEvent.click(screen.getByText('Open field survey'))
+    await waitFor(() => expect(mock.api.workspace.revealOwnPanel).toHaveBeenCalledWith('left_sidebar'))
+    expect(await readTimeControl()).toMatchObject({ selectedDate: '2026-06-08', selectedTime: '08:00', cursor: '2026-06-01' })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    expect(scrollTo).not.toHaveBeenCalled()
+    await act(async () => { await patchTimeControl({ selectedTime: '15:00' }) })
+    await waitFor(() => expect(scrollTo).toHaveBeenCalled())
+  })
+
   it('selects on click, edits on double click, and opens related content only from the context menu', async () => {
     render(React.createElement(Calendar))
 
@@ -1593,22 +1608,23 @@ describe('AgendaPanel item clicks', () => {
     flushTimeControl()
   })
 
-  it('keeps source and group header filters icon-only beside the separate Note dates section', async () => {
-    await act(async () => render(React.createElement(AgendaPanel)))
+  it('keeps only Today and the page button in the header and opens sources, groups and note dates inline from icon segments', async () => {
+    const { container } = await act(async () => render(React.createElement(AgendaPanel)))
 
     const sources = await screen.findByRole('button', { name: 'Sources' })
-    for (const label of ['Sources', 'Groups']) {
-      const button = screen.getByRole('button', { name: label })
+    expect(screen.queryByRole('button', { name: /daily note/i })).toBeNull()
+    expect([...container.querySelectorAll('.panel-header .agenda-header-actions > button')].every((button) => button.matches('.plugin-open-page, .agenda-today-btn'))).toBe(true)
+    expect([...container.querySelectorAll('.agenda-filter-bar > button')].map((button) => button.getAttribute('aria-label'))).toEqual(['Sources', 'Groups', 'Note dates'])
+    for (const button of container.querySelectorAll('.agenda-filter-bar > button')) {
       expect(button.textContent).toBe('')
       expect(button.querySelector('svg')).toBeInTheDocument()
-      expect(button).toHaveAttribute('title', label)
     }
-    expect(sources).not.toHaveClass('active')
+    expect(container.querySelector('.notedate-sidebar-sources')).toBeNull()
+    expect(sources).toHaveAttribute('aria-pressed', 'false')
     await act(async () => fireEvent.click(sources))
-    expect(mock.popovers).toHaveLength(1)
-    let popover: ReturnType<typeof render>
-    await act(async () => { popover = render(React.createElement(React.Fragment, null, mock.popovers[0].node)) })
-    const sourceRows = [...popover!.container.querySelectorAll<HTMLButtonElement>('.calendar-filter-option')]
+    expect(sources).toHaveClass('active')
+    expect(mock.popovers).toHaveLength(0)
+    const sourceRows = [...container.querySelectorAll<HTMLButtonElement>('.agenda-filter-panel-sources .calendar-filter-option')]
     expect(sourceRows.map((row) => row.querySelector('.calendar-filter-option-label')?.textContent)).toEqual(['Events', 'Note dates', 'To-Do'])
     expect(sourceRows.map((row) => row.querySelector('.calendar-filter-option-count')?.textContent)).toEqual(['1', '0', '1'])
     expect(screen.getByRole('button', { name: /Deselect all/ })).toBeInTheDocument()
@@ -1618,11 +1634,13 @@ describe('AgendaPanel item clicks', () => {
       method: 'updatePluginSettings',
       payload: { pluginId: 'calendar', key: 'hiddenSources', value: ['calendar:plugin:todo'] }
     })
-    await waitFor(() => expect(sources).toHaveClass('active'))
-    expect(sources.textContent).toBe('')
+    await waitFor(() => expect(sources).toHaveClass('filtered'))
+    await act(async () => fireEvent.click(sources))
+    expect(sources).not.toHaveClass('active')
+    expect(container.querySelector('.agenda-filter-panel')).toBeNull()
   })
 
-  it('filters individual note-date sources from the expandable Agenda section', async () => {
+  it('filters individual note-date sources from the Note dates segment', async () => {
     mock = setupCalendarApi({
       indexEntries: [
         { relPath: 'Contacts/Fern.md', title: 'Fern', kind: 'note', frontmatter: { type: 'contact', birthdate: '1990-05-04' }, mtimeMs: 0 },
@@ -1636,9 +1654,10 @@ describe('AgendaPanel item clicks', () => {
     await act(async () => render(React.createElement(AgendaPanel)))
 
     const button = await screen.findByRole('button', { name: 'Note dates' })
-    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+    await waitFor(() => expect(button).toHaveClass('filtered'))
     await act(async () => fireEvent.click(button))
-    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(button).toHaveAttribute('aria-pressed', 'true')
     const rows = [...document.querySelectorAll('.notedate-sidebar-source')]
     expect(rows.map(row => row.querySelector('.notedate-sidebar-title')?.textContent)).toEqual(['Birthdays', 'Deadlines'])
     expect(rows.map(row => row.querySelector('.calendar-filter-option-count')?.textContent)).toEqual(['1', '1'])
@@ -1647,7 +1666,8 @@ describe('AgendaPanel item clicks', () => {
     await act(async () => fireEvent.click(screen.getByRole('switch', { name: 'Deadlines' })))
     await waitFor(() => expect(mock.datasets.get('calendar.note_date_sources')?.find((row) => row.id === 'deadlines')?.definition).toMatchObject({ visible: true }))
     expect(screen.getByRole('switch', { name: 'Deadlines' })).toBeChecked()
-    expect(button).toHaveAttribute('aria-expanded', 'true')
+    expect(button).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(button).not.toHaveClass('filtered'))
   })
 
   it('uses only the completion control for contributed tasks in Agenda', async () => {
@@ -1684,8 +1704,7 @@ describe('AgendaPanel item clicks', () => {
     })
     await act(async () => render(React.createElement(AgendaPanel)))
 
-    await act(async () => fireEvent.click(await screen.findByRole('button', { name: /Groups/ })))
-    await act(async () => render(React.createElement(React.Fragment, null, mock.popovers.at(-1)?.node)))
+    await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Groups' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Pixar/ })))
 
     const apple = screen.getByRole('button', { name: /^Apple/ })
@@ -1771,6 +1790,26 @@ describe('AgendaPanel item clicks', () => {
     await act(async () => {})
     expect((await readTimeControl()).selectedDate).toBe('2026-06-08')
     expect(header()).toBeDefined()
+  })
+
+  it('leaves the Agenda where it was clicked while a selection from elsewhere still scrolls it', async () => {
+    const { container } = render(<AgendaPanel />)
+    await screen.findByText('Agenda todo')
+    await act(async () => {})
+    const scrolled = (): (string | undefined)[] => vi.mocked(Element.prototype.scrollIntoView).mock.contexts.map((element) => (element as HTMLElement).dataset.visibleKey)
+    vi.mocked(Element.prototype.scrollIntoView).mockClear()
+    const card = screen.getByText('Agenda todo').closest('.agenda-card')!
+    fireEvent.pointerDown(card)
+    fireEvent.click(card)
+    await waitFor(async () => expect((await readTimeControl()).selectedDate).toBe('2026-06-08'))
+    const july = [...container.querySelectorAll<HTMLElement>('.agenda-day-header')].find((element) => element.closest<HTMLElement>('[data-visible-key]')?.dataset.visibleKey === '2026-07-12')!
+    fireEvent.pointerDown(july)
+    fireEvent.click(july)
+    await waitFor(async () => expect((await readTimeControl()).selectedDate).toBe('2026-07-12'))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    expect(scrolled()).toEqual([])
+    await act(async () => { await patchTimeControl({ selectedDate: '2026-06-08' }) })
+    await waitFor(() => expect(scrolled()).toContain('2026-06-08'))
   })
 
   it('reveals an event from its whole row with the keyboard', async () => {

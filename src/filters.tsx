@@ -185,61 +185,9 @@ export function CalendarFilterList({
   )
 }
 
-export function CalendarFilterButton({
-  label,
-  icon,
-  options,
-  hidden,
-  settingsKey,
-  emptyText,
-  onOpenSettings,
-  saveHidden
-}: {
-  label: string
-  icon: ReactNode
-  options: readonly CalendarFilterOption[]
-  hidden: readonly string[]
-  settingsKey?: string
-  emptyText: string
-  onOpenSettings?: () => void
-  saveHidden?: (next: string[]) => Promise<boolean>
-}): ReactElement {
-  const filtered = options.some((option) => hidden.includes(option.id))
-  return (
-    <button
-      type="button"
-      className={`calendar-filter-btn${filtered ? ' active' : ''}`}
-      aria-label={label}
-      aria-haspopup="dialog"
-      title={label}
-      onClick={(event) => {
-        const anchor = event.currentTarget
-        void api.ui.openPopover(
-          ({ close }) => (
-            <CalendarFilterList
-              label={label}
-              options={options}
-              hidden={hidden}
-              settingsKey={settingsKey}
-              emptyText={emptyText}
-              onOpenSettings={onOpenSettings ? () => { close(); onOpenSettings() } : undefined}
-              saveHidden={saveHidden}
-            />
-          ),
-          { anchor, align: 'end' },
-          { className: 'calendar-filter-popover', ariaLabel: label }
-        )
-      }}
-    >
-      <span className="calendar-filter-icon">{icon}</span>
-    </button>
-  )
-}
-
-export function NoteDateSourceFilterList({ embedded = false, collapsible = false }: { embedded?: boolean; collapsible?: boolean }): ReactElement {
+export function NoteDateSourceFilterList({ embedded = false }: { embedded?: boolean }): ReactElement {
   const sources = useNoteDateSources()
   const entries = useNoteIndex(sources)
-  const [open, setOpen] = React.useState(!collapsible)
   const [expanded, setExpanded] = React.useState<string[]>([])
   const [error, setError] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
@@ -254,10 +202,10 @@ export function NoteDateSourceFilterList({ embedded = false, collapsible = false
   })
   return <div className={`notedate-sidebar-sources${embedded ? ' embedded' : ''}`}>
     <div className="notedate-sources-header">
-      {collapsible ? <button type="button" className="notedate-sources-heading" aria-expanded={open} onClick={() => setOpen(value => !value)}><ChevronRight />{uiText('calendar.filter.noteDates')}</button> : <span>{uiText('calendar.filter.noteDates')}</span>}
+      <span>{uiText('calendar.filter.noteDates')}</span>
       <api.ui.settings.Toggle label={uiText('sources.toggleAll')} checked={shown.length > 0 && shown.every(source => source.visible)} disabled={saving || !shown.length} onChange={visible => commit(sources.map(source => source.hidden ? source : { ...source, visible }))} />
     </div>
-    {open && <div className="notedate-sidebar-list">
+    <div className="notedate-sidebar-list">
       {shown.map(source => <div key={source.id} className="notedate-sidebar-source notedate-source-sortable" {...reorder.getItemProps(source)}>
         <div className="notedate-sidebar-row">
           <button {...reorder.getHandleProps(source)} className="settings-reorder-handle notedate-source-grip" title={uiText('sources.reorder')}><GripVertical /></button>
@@ -271,7 +219,7 @@ export function NoteDateSourceFilterList({ embedded = false, collapsible = false
       </div>)}
       {!shown.length && <p className="notedate-sources-description">{uiText('calendar.filter.noSources')}</p>}
       {reorder.liveRegion}
-    </div>}
+    </div>
     {error && <p role="alert" className="settings-path-error">{api.ui.t('error.commandFailed')}</p>}
   </div>
 }

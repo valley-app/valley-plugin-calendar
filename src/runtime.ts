@@ -141,7 +141,31 @@ export function takeExplicitCalendarNavigation(surface: string): { time: boolean
   return { time, view }
 }
 
-function publishCalendarReveal(request: {
+export type CalendarSelectionOrigin = 'main_workspace' | 'left_sidebar' | 'right_sidebar'
+
+interface CalendarSelectionMark {
+  surface: CalendarSelectionOrigin
+  selectedDate: string | null
+  selectedTime: string | null
+}
+
+function selectionOrigin(): { value: CalendarSelectionMark | null } {
+  return api.runtime.getOrCreate('calendar.selectionOrigin', () => ({ value: null }))
+}
+
+/** Remember which surface made the current selection; that surface keeps its own scroll position and period. */
+export function markCalendarSelectionOrigin(mark: CalendarSelectionMark | null): void {
+  selectionOrigin().value = mark
+}
+
+/** True while the shared selection is the one `surface` itself made, so it must not scroll or page to it. */
+export function isOwnCalendarSelection(surface: CalendarSelectionOrigin, selection: { selectedDate?: string | null; selectedTime?: string | null }, withTime = false): boolean {
+  const mark = selectionOrigin().value
+  return !!mark && mark.surface === surface && mark.selectedDate === (selection.selectedDate ?? null) &&
+    (!withTime || mark.selectedTime === (selection.selectedTime ?? null))
+}
+
+interface CalendarRevealRequest {
   date: string
   startTime?: string
   endTime?: string
@@ -149,7 +173,11 @@ function publishCalendarReveal(request: {
   itemId?: string
   /** Switch the grid to this view; omit to keep whatever the user is on. */
   view?: 'month' | 'week' | 'year'
-}, surface: CalendarRevealTarget['surface']): void {
+  /** The surface that was clicked; it stays where it is while the destination follows. */
+  origin?: CalendarSelectionOrigin
+}
+
+function publishCalendarReveal(request: CalendarRevealRequest, surface: CalendarRevealTarget['surface']): void {
   const pulse = api.runtime.getOrCreate<RevealPulse>('calendar.revealPulse', () => ({
     nonce: 0,
     timer: null
@@ -157,10 +185,12 @@ function publishCalendarReveal(request: {
   const reveals = revealTargetStore()
 
   markExplicitCalendarNavigation(request.view)
+  markCalendarSelectionOrigin(request.origin ? { surface: request.origin, selectedDate: request.date, selectedTime: request.startTime ?? null } : null)
   if (request.view) void api.settings.set('mainView', request.view)
   api.workspace.patchTimeControl({
     ...(request.view ? { view: request.view } : {}),
-    cursor: `${request.date.slice(0, 7)}-01`,
+    // A click in the main grid reveals elsewhere; paging the main month to a neighbouring month's spill day would move it.
+    ...(request.origin === 'main_workspace' ? {} : { cursor: `${request.date.slice(0, 7)}-01` }),
     selectedDate: request.date,
     selectedTime: request.startTime ?? null,
     timeRange: normalizeTimeRange({ start: request.startTime, end: request.endTime }),
@@ -190,25 +220,12 @@ function publishCalendarReveal(request: {
 
 }
 
-export function revealCalendarItem(request: {
-  date: string
-  startTime?: string
-  endTime?: string
-  sourceId?: string
-  itemId?: string
-  view?: 'month' | 'week' | 'year'
-}): void {
+export function revealCalendarItem(request: CalendarRevealRequest): void {
   publishCalendarReveal(request, 'main')
   api.workspace.openMainTab()
 }
 
-export function revealCalendarAgendaItem(request: {
-  date: string
-  startTime?: string
-  endTime?: string
-  sourceId?: string
-  itemId?: string
-}): void {
+export function revealCalendarAgendaItem(request: Omit<CalendarRevealRequest, 'view'>): void {
   publishCalendarReveal(request, 'agenda')
   api.workspace.revealOwnPanel('left_sidebar')
 }

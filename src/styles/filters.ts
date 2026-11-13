@@ -3,28 +3,6 @@ export const headerFilterStyles = `/* ── Header filters (groups / sources) �
    where they only fitted on a wide window and were missing from the Agenda
    entirely, into a popover behind one icon on both surfaces. */
 .calendar-filter-actions { display: inline-flex; align-items: center; gap: 2px; }
-.calendar-filter-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-tertiary, var(--text-secondary));
-  font-size:0.9375rem;
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-  transition:
-    background-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-.calendar-filter-btn:hover { background: var(--hover-bg); color: var(--title-color); }
-.calendar-filter-btn.active { background: var(--tree-active-bg); color: var(--accent-color); }
-.calendar-filter-icon { display: inline-flex; font-size: 0.9rem; }
-.calendar-filter-icon svg { width: 15px; height: 15px; }
 .calendar-filter-popover {
   width: min(244px, calc(100vw - 16px));
   padding: calc(var(--space-3) / 2);

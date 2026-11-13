@@ -1,6 +1,6 @@
 import { saveCalendarFile } from './calendarFiles'
 import { CalendarPreview, PluginGlyph } from './CalendarPreview'
-import { React, api, revealCalendarAgendaItem, revealCalendarItem } from './runtime'
+import { React, api, revealCalendarAgendaItem, revealCalendarItem, type CalendarSelectionOrigin } from './runtime'
 import type { ReactElement } from 'react'
 import type { EventRecord } from '@valley/plugin-sdk/types'
 import type {
@@ -131,23 +131,25 @@ export function requestCalendarItemEdit(item: CalItem): void {
   api.workspace.openMainTab()
 }
 
-export function revealItemInCalendarAgenda(item: CalItem): void {
+export function revealItemInCalendarAgenda(item: CalItem, origin?: CalendarSelectionOrigin): void {
   revealCalendarAgendaItem({
     date: item.date,
     startTime: item.startTime,
     endTime: item.endTime,
     sourceId: item.sourceId,
-    itemId: item.id
+    itemId: item.id,
+    origin
   })
 }
 
-export function openItemInCalendarMain(item: CalItem): void {
+export function openItemInCalendarMain(item: CalItem, origin?: CalendarSelectionOrigin): void {
   revealCalendarItem({
     date: item.date,
     startTime: item.startTime,
     endTime: item.endTime,
     sourceId: item.sourceId,
-    itemId: item.id
+    itemId: item.id,
+    origin
   })
 }
 

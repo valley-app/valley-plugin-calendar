@@ -79,6 +79,7 @@ export function WeekGrid({
   weekDays,
   selectedDay,
   selectedTime,
+  followSelectedTime = true,
   itemsByDay,
   onPickDay,
   revealTarget,
@@ -102,6 +103,8 @@ export function WeekGrid({
   weekDays?: Date[]
   selectedDay?: Date
   selectedTime?: string | null
+  /** False when this grid made the selection itself: it keeps its scroll position. */
+  followSelectedTime?: boolean
   itemsByDay?: Map<string, CalItem[]>
   onPickDay?: (d: Date) => void
   revealTarget: CalendarRevealTarget | null
@@ -155,9 +158,11 @@ export function WeekGrid({
   const endBound = endHour * 60
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
 
+  const followRef = React.useRef(followSelectedTime)
+  followRef.current = followSelectedTime
   React.useEffect(() => {
     const el = bodyRef.current
-    if (!el || !selectedTime) return
+    if (!el || !selectedTime || !followRef.current) return
     const target = Math.max(0, ((timeToMinutes(selectedTime) - startBound) / 60) * HOUR_PX - HOUR_PX)
     if (typeof el.scrollTo === 'function') el.scrollTo({ top: target, behavior: 'smooth' })
     else el.scrollTop = target

@@ -225,7 +225,7 @@ export const noteDateStyles = `/* ── Note-date source editor (Settings → C
 .notedate-source-grip:active { cursor:grabbing; }
 .notedate-source-grip:hover, .notedate-source-disclosure:hover { background:var(--hover-bg); color:var(--text-color); }
 .notedate-source-grip svg, .notedate-source-disclosure svg { display:block; width:16px; height:16px; }
-.notedate-source-disclosure[aria-expanded='true'] svg, .notedate-sources-heading[aria-expanded='true'] > svg { transform:rotate(90deg); }
+.notedate-source-disclosure[aria-expanded='true'] svg { transform:rotate(90deg); }
 .notedate-source-summary { display:flex; flex:1; flex-direction:column; align-items:flex-start; gap:3px; min-width:0; border:0; padding:0; background:none; color:var(--text-color); font:inherit; font-weight:600; text-align:left; cursor:pointer; overflow-wrap:anywhere; }
 .notedate-source-summary small { font-size:var(--smaller-font-size); color:var(--text-secondary); overflow-wrap:anywhere; }
 .notedate-source-head > [data-plugin-widget-inline] { flex:0 0 auto; }
@@ -239,7 +239,7 @@ export const noteDateStyles = `/* ── Note-date source editor (Settings → C
 .notedate-add-source:hover { background:var(--selected-bg, var(--hover-bg)); border-color:var(--accent-color); }
 .notedate-add-field { display:inline-flex; align-items:center; gap:6px; align-self:flex-start; }
 .notedate-sources-header { display:flex; align-items:center; gap:8px; flex:0 0 var(--app-bar-height, 38px); height:var(--app-bar-height, 38px); min-height:var(--app-bar-height, 38px); box-sizing:border-box; padding:0 10px; border-bottom:1px solid var(--border-light); font-size:var(--small-font-size); font-weight:600; background:var(--container-color); }
-.notedate-sources-header > span:first-child, .notedate-sources-heading { flex:1; min-width:0; }
+.notedate-sources-header > span:first-child { flex:1; min-width:0; }
 .notedate-sources-description { margin:10px 0; color:var(--text-secondary); font-size:var(--smaller-font-size); line-height:1.5; }
 .notedate-sidebar-sources { flex:0 0 auto; min-height:0; }
 .notedate-sidebar-sources .notedate-sources-header { position:sticky; top:0; z-index:1; }
@@ -264,10 +264,7 @@ export const noteDateStyles = `/* ── Note-date source editor (Settings → C
 .notedate-sources-search input { width:100%; min-width:0; border:0; background:none; outline:0; box-shadow:none; color:inherit; }
 .notedate-sources-search input:focus, .notedate-sources-search input:focus-visible { border:0; outline:none; box-shadow:none; background:none; }
 .notedate-icon-error { grid-column:1 / -1; width:180px; font-size:var(--smaller-font-size); }
-.notedate-sources-heading { display:flex; align-items:center; gap:8px; background:none; border:0; color:inherit; padding:0; font:inherit; text-align:left; cursor:pointer; }
-.notedate-sources-heading svg { width:16px; height:16px; flex-shrink:0; }
 .notedate-sidebar-glyph { display:flex; width:18px; height:18px; flex-shrink:0; }
-.calendar-agenda-panel > .notedate-sidebar-sources .notedate-sidebar-list { max-height:240px; overflow:auto; }
 .notedate-sidebar-sources .notedate-sources-description { padding:0 6px; }
 @container (max-width:480px) { .notedate-source-grid { grid-template-columns:minmax(0, 1fr); } }
 `

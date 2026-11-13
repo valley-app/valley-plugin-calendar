@@ -40,7 +40,7 @@ import { MonthGrid, YearGrid } from './MonthGrid'
 import { SWIPE_IDLE_MS, calendarSwipeStep, newSwipeGesture, type CalendarSwipeGesture } from './swipe'
 import { CalendarDays, ChevronRight, Clock, Plus, Trash, X } from './icons'
 import { uiText } from './localization'
-import { revealTargetStore } from './runtime'
+import { isOwnCalendarSelection, markCalendarSelectionOrigin, revealTargetStore } from './runtime'
 import { calendarPropertiesSelection, selectCalendarProperties, useCalendarSurface } from './surfaces'
 import { useCalendarFileActions } from './fileViewCommands'
 
@@ -152,11 +152,16 @@ export function Calendar({
       rangeStart: p.rangeStart === undefined ? (tc.rangeStart ?? null) : p.rangeStart,
       rangeEnd: p.rangeEnd === undefined ? (tc.rangeEnd ?? null) : p.rangeEnd
     }
+    if (p.selectedDate !== undefined || p.selectedTime !== undefined) markCalendarSelectionOrigin({
+      surface,
+      selectedDate: nextEntry.selectedDate,
+      selectedTime: p.selectedTime === undefined ? (tc.selectedTime ?? null) : p.selectedTime
+    })
     if (opts.pushHistory !== false) pushHistory(nextEntry)
     if (p.view !== undefined) setView_(p.view)
     if (p.cursor !== undefined) setCursor_(p.cursor)
     if (Object.keys(p).length > 0) patchShared(p)
-  }, [cursor, patchShared, pushHistory, tc.rangeEnd, tc.rangeStart, tc.selectedDate, view])
+  }, [cursor, patchShared, pushHistory, surface, tc.rangeEnd, tc.rangeStart, tc.selectedDate, tc.selectedTime, view])
   const goHistory = React.useCallback((delta: -1 | 1): void => {
     const nextIndex = historyState.index + delta
     if (nextIndex < 0 || nextIndex >= historyState.entries.length) return
@@ -241,11 +246,11 @@ export function Calendar({
       itemClickTimerRef.current = null
       if (itemClickTarget === 'owner' && item.kind === 'sourced' && item.sourceId) {
         void openSourcedItem(item.sourceId, item.id).then((opened) => {
-          if (!opened) revealItemInCalendarAgenda(item)
+          if (!opened) revealItemInCalendarAgenda(item, surface)
         })
         return
       }
-      revealItemInCalendarAgenda(item)
+      revealItemInCalendarAgenda(item, surface)
     }, 220)
   }, [itemClickTarget, surface])
 
@@ -597,7 +602,6 @@ export function Calendar({
 
   const navActions = (
     <div className="calendar-actions">
-      <button title={uiText('calendar.daily.open')} aria-label={uiText('calendar.daily.open')} onClick={(e) => void openDailyNote(tc.selectedDate ?? isoDay(today), undefined, true, api.ui.hasModKey(e))}>＋</button>
       <button aria-label={uiText('auto.50f94286ba30')} onClick={() => step(-1)}>‹</button>
       <button aria-label={uiText('auto.24345a14377f')} onClick={goToday}>{uiText('auto.7a46866bc719')}</button>
       <button aria-label={uiText('auto.bc981983e7f5')} onClick={() => step(1)}>›</button>
@@ -672,6 +676,7 @@ export function Calendar({
               weekDays={weekDays}
               selectedDay={selected}
               selectedTime={tc.selectedTime}
+              followSelectedTime={!isOwnCalendarSelection(surface, tc, true)}
               itemsByDay={itemsByDay}
               onPickDay={pickWeekDay}
               revealTarget={revealTarget}
@@ -697,7 +702,7 @@ export function Calendar({
                   sourceId={sourceId}
                   color={colorFor(calendarItem)}
                   revealNonce={revealNonce}
-                  onClick={() => { selectCalendarProperties(calendarItem, surface); openItemInCalendarMain(calendarItem) }}
+                  onClick={() => { selectCalendarProperties(calendarItem, surface); openItemInCalendarMain(calendarItem, surface) }}
                   onDoubleClick={(newTab) => editItem(calendarItem, newTab)}
                   onContextMenu={(event) => void handleItemAction(calendarItem, event)}
                 />
