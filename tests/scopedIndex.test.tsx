@@ -102,11 +102,19 @@ it('keeps the note index readable when the host refuses its observation during a
   expect(view.result.current).toEqual([])
 })
 
+class Boundary extends React.Component<{ onError: (error: Error) => void; children?: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError(): { failed: boolean } { return { failed: true } }
+  componentDidCatch(error: Error): void { this.props.onError(error) }
+  render(): React.ReactNode { return this.state.failed ? null : this.props.children }
+}
+
 it('still fails visibly when the index observation fails for another reason', async () => {
   const mock = createMockValleyApi({ manifest: { id: 'calendar', indexState: 'scoped' }, indexEntries: [note(1)] })
   cleanups.push(initRuntime(mock.api))
   vi.spyOn(mock.api.index, 'observe').mockRejectedValue(new Error('Index store is corrupt'))
-  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-  renderHook(() => useNoteIndex([source]))
-  await waitFor(() => expect(errors.mock.calls.flat().some((arg: unknown) => arg instanceof Error && arg.message === 'Index store is corrupt')).toBe(true))
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const caught = vi.fn()
+  renderHook(() => useNoteIndex([source]), { wrapper: ({ children }) => <Boundary onError={caught}>{children}</Boundary> })
+  await waitFor(() => expect(caught).toHaveBeenCalledWith(expect.objectContaining({ message: 'Index store is corrupt' })))
 })
