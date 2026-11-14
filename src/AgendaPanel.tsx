@@ -115,16 +115,17 @@ export function AgendaPanel(): ReactElement {
     for (const list of map.values()) {
       list.sort((a, b) => (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99'))
     }
-    if (!search.trim() && tc.selectedDate && !map.has(tc.selectedDate)) map.set(tc.selectedDate, [])
+    // Today always has its section (with "No items" when nothing is due), so the Agenda shows where today is.
+    if (!search.trim()) for (const day of [todayKey, tc.selectedDate]) if (day && !map.has(day)) map.set(day, [])
     const keys = [...map.keys()].sort((a, b) => b.localeCompare(a))
     return { days: keys, byDay: map }
-  }, [search, tc.selectedDate, visibleItems])
+  }, [search, tc.selectedDate, todayKey, visibleItems])
 
   const revealDay = React.useMemo(() => revealTarget
     ? visibleItems.find((item) => item.id === revealTarget.itemId && (item.sourceId ?? '') === revealTarget.sourceId)?.date ?? null
     : null, [revealTarget, visibleItems])
   const estimate = React.useCallback((key: string, index: number) => estimateDay(byDay.get(key)?.length ?? 0, index === 0), [byDay])
-  const sections = useVisibleRange(React, { ids: days, estimate, pinned: [tc.selectedDate, revealDay] })
+  const sections = useVisibleRange(React, { ids: days, estimate, pinned: [tc.selectedDate, revealDay, todayKey] })
   const { show, offsetOf } = sections
   // Keep the first visible day in place when days are added or removed above it (items arrive in pages around the
   // focused year), as the browser's scroll anchoring did before the list rendered only the days near the viewport.
@@ -162,7 +163,7 @@ export function AgendaPanel(): ReactElement {
   React.useEffect(() => {
     const body = bodyRef.current
     if (!body) return
-    const stop = (): void => { didInitialScroll.current = true }
+    const stop = (): void => { didInitialScroll.current = true; stopGlide() }
     const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const
     events.forEach((type) => body.addEventListener(type, stop, { passive: true }))
     return () => events.forEach((type) => body.removeEventListener(type, stop))
@@ -218,8 +219,45 @@ export function AgendaPanel(): ReactElement {
     return () => root.removeEventListener('scroll', update)
   }, [todayKey, days, recordAnchor])
 
+  /**
+   * Glide to a day with an eased scroll. The target is measured again on every frame, so rows that render and get
+   * their real height on the way (the list keeps only the days near the viewport) cannot make it stop short; a far
+   * target first moves to just over a screen away, so the glide stays short and readable.
+   */
+  const glideFrame = React.useRef<{ id: number; view: Window } | null>(null)
+  const stopGlide = React.useCallback((): void => {
+    if (glideFrame.current) glideFrame.current.view.cancelAnimationFrame(glideFrame.current.id)
+    glideFrame.current = null
+  }, [])
+  React.useEffect(() => stopGlide, [stopGlide])
+  const glideToDay = (key: string): void => {
+    const body = bodyRef.current
+    if (!body) return
+    stopGlide()
+    const view = body.ownerDocument.defaultView ?? window
+    const targetOf = (): number | null => {
+      const section = sectionRefs.current.get(key)
+      return section ? body.scrollTop + section.getBoundingClientRect().top - body.getBoundingClientRect().top : null
+    }
+    const first = targetOf()
+    if (first === null || view.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { show(key, { block: 'start' }); return }
+    const span = body.clientHeight * 1.2
+    if (Math.abs(first - body.scrollTop) > span * 2) body.scrollTop = first + (first > body.scrollTop ? -span : span)
+    const from = body.scrollTop
+    const begin = view.performance.now()
+    const step = (now: number): void => {
+      const target = targetOf()
+      if (target === null) { glideFrame.current = null; return }
+      const t = Math.min(1, (now - begin) / 520)
+      body.scrollTop = from + (target - from) * (1 - Math.pow(1 - t, 3))
+      glideFrame.current = t < 1 ? { id: view.requestAnimationFrame(step), view } : null
+    }
+    glideFrame.current = { id: view.requestAnimationFrame(step), view }
+  }
+
   function scrollToToday(): void {
-    if (days.includes(todayKey)) showDay(todayKey)
+    didInitialScroll.current = true
+    glideToDay(todayKey)
   }
 
   const filterSegments: { id: AgendaFilterPanel; label: string; icon: ReactElement; filtered: boolean }[] = [
@@ -241,7 +279,7 @@ export function AgendaPanel(): ReactElement {
       <div className="panel-header">
         <span className="panel-title">{uiText('auto.891e9d6d47f1')}</span>
         <div className="agenda-header-actions">
-          {!todayVisible && (
+          {!todayVisible && days.includes(todayKey) && (
             <button className="agenda-today-btn" onClick={scrollToToday}>
               {uiText('auto.24345a14377f')}</button>
           )}

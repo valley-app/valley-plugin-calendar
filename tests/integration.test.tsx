@@ -1526,14 +1526,15 @@ describe('AgendaPanel initial scroll', () => {
     await act(async () => { await patchTimeControl({ view: 'month', cursor: `${dayOffset(0).slice(0, 8)}01`, selectedDate: null, rangeStart: null, rangeEnd: null }) })
     const { container } = render(React.createElement(AgendaPanel))
     await waitFor(() => expect(container.querySelector('[data-visible-key]')).toBeTruthy())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
     vi.mocked(Element.prototype.scrollIntoView).mockClear()
     beforeRelease?.(container)
     await act(async () => { release(); await sourceDelay })
     await waitFor(() => expect(container.querySelector(`[data-visible-key="${dayOffset(200)}"]`)).toBeTruthy())
   }
-  it('scrolls to the nearest day from today once a later page brings it', async () => {
+  it('keeps aiming at today, which always has a section, once a later page brings more days', async () => {
     await openWithLateSource()
-    await waitFor(() => expect(scrolledKeys()).toContain(dayOffset(2)))
+    await waitFor(() => expect(scrolledKeys()).toContain(dayOffset(0)))
   })
   it('aims at today again when a later page adds days above it', async () => {
     let release!: () => void
@@ -1545,7 +1546,7 @@ describe('AgendaPanel initial scroll', () => {
     vi.mocked(Element.prototype.scrollIntoView).mockClear()
     await act(async () => { release(); await sourceDelay })
     await waitFor(() => expect(container.querySelector(`[data-visible-key="${dayOffset(200)}"]`)).toBeTruthy())
-    await waitFor(() => expect(scrolledKeys()).toContain(dayOffset(2)))
+    await waitFor(() => expect(scrolledKeys()).toContain(dayOffset(0)))
   })
   it('keeps a saved selected date in view when a later page adds days above it', async () => {
     let release!: () => void
@@ -1562,7 +1563,7 @@ describe('AgendaPanel initial scroll', () => {
   it('leaves the list where the user scrolled it before the later page arrived', async () => {
     await openWithLateSource((container) => fireEvent.wheel(container.querySelector('.agenda-body')!, { deltaY: 120 }))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
-    expect(scrolledKeys()).not.toContain(dayOffset(2))
+    expect(scrolledKeys()).not.toContain(dayOffset(0))
   })
 })
 
@@ -1790,6 +1791,26 @@ describe('AgendaPanel item clicks', () => {
     await act(async () => {})
     expect((await readTimeControl()).selectedDate).toBe('2026-06-08')
     expect(header()).toBeDefined()
+  })
+
+  it('shows an empty today, glides to it from Today without changing the selection, and hides Today while it is in view', async () => {
+    const now = new Date()
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const { container } = render(<AgendaPanel />)
+    await screen.findByText('Agenda todo')
+    const today = container.querySelector<HTMLElement>(`[data-visible-key="${todayKey}"]`)!
+    expect(today).toHaveTextContent('No items')
+    const body = container.querySelector<HTMLElement>('.agenda-body')!
+    const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 300, width: 300, x: 0, y: top, toJSON: () => ({}) }) as DOMRect
+    body.getBoundingClientRect = () => rect(0, 400)
+    today.getBoundingClientRect = () => rect(900 - body.scrollTop, 60)
+    await act(async () => { fireEvent.scroll(body) })
+    const before = await readTimeControl()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Today' })) })
+    await waitFor(() => expect(body.scrollTop).toBe(900), { timeout: 2000 })
+    expect(await readTimeControl()).toEqual(before)
+    await act(async () => { fireEvent.scroll(body) })
+    expect(screen.queryByRole('button', { name: 'Today' })).toBeNull()
   })
 
   it('leaves the Agenda where it was clicked while a selection from elsewhere still scrolls it', async () => {
