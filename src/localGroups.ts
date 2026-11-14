@@ -5,18 +5,20 @@
  * They live in Calendar's plugin settings under `localGroups`, in the same shape
  * To-Do uses for its own groups. An event references one by its `local-…` id in
  * the ordinary `groupId` field. An own group is a plain group, edited like the
- * shared ones; it never sits under a shared group (a `parent` saved by 3.3.17 is
- * dropped on read). Other plugins never see these groups: items they contribute
+ * shared ones. It can be a subgroup of another own group (`parent`, one level
+ * only) but never sits under a shared group. Other plugins never see these groups: items they contribute
  * still resolve by name against the shared groups only.
  */
 import type { ValleyGroup } from '@valley/plugin-sdk/types'
-import { groupKey } from '@valley/plugin-sdk/groups'
+import { groupKey, nestGroups } from '@valley/plugin-sdk/groups'
 
 export interface LocalGroup {
   id: string
   name: string
   color: string
   aliases?: string[]
+  /** Id of the own group this one is a subgroup of. */
+  parent?: string
 }
 
 /** A group as Calendar's pickers, filters and colours see it. */
@@ -58,10 +60,12 @@ export function normalizeLocalGroups(value: unknown, shared: readonly ValleyGrou
     ids.add(id)
     taken.add(groupKey(name))
     aliases.forEach((alias) => taken.add(groupKey(alias)))
-    out.push({ id, name, color, ...(aliases.length ? { aliases } : {}) })
+    const parent = clean(raw.parent, 64)
+    out.push({ id, name, color, ...(aliases.length ? { aliases } : {}), ...(isLocalGroupId(parent) ? { parent } : {}) })
     if (out.length >= LOCAL_GROUP_LIMIT) break
   }
-  return out
+  // A parent that is not an own top-level group is dropped; subgroups follow their group.
+  return nestGroups(out)
 }
 
 /** A renamed group keeps its old name as an alias, the same rule the shared groups follow. */
@@ -81,7 +85,8 @@ export function mergedGroups(shared: readonly ValleyGroup[], local: readonly Loc
       name: group.name,
       color: group.color,
       local: true,
-      ...(group.aliases ? { aliases: group.aliases } : {})
+      ...(group.aliases ? { aliases: group.aliases } : {}),
+      ...(group.parent ? { parent: group.parent } : {})
     }))
   ]
 }

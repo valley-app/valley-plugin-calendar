@@ -44,7 +44,7 @@ const local: LocalGroup[] = [
 const item = (id: string, extra: Partial<CalItem>): CalItem => ({ kind: 'event', id, title: id, date: '2026-11-13', ...extra } as CalItem)
 
 describe('Calendar own groups', () => {
-  it('keeps only valid, uniquely named groups and drops a saved parent', () => {
+  it('keeps only valid, uniquely named groups and drops a parent that is no own group', () => {
     expect(normalizeLocalGroups([
       { id: 'local-a1', name: 'Banding', color: 'palette:violet', parent: 'copper-finch' },
       { id: 'local-a2', name: 'copper finch', color: 'palette:red' },
@@ -88,6 +88,22 @@ describe('Calendar own groups', () => {
     ]
     expect(visibleItems(items, groups, ['copper-finch'], []).map((entry) => entry.id)).toEqual(['in-child', 'in-errands', 'todo-named-errands', 'ungrouped'])
     expect(visibleItems(items, groups, ['local-0f9e8d7c6b5a'], []).map((entry) => entry.id)).toEqual(['in-parent', 'in-child', 'todo-named-errands', 'ungrouped'])
+  })
+
+  it('keeps one level of subgroups and hides them with their group', () => {
+    const nested = normalizeLocalGroups([
+      { id: 'local-b1', name: 'Ringing', color: 'palette:blue', parent: 'local-a1' },
+      { id: 'local-c1', name: 'Garden', color: 'palette:green' },
+      { id: 'local-a1', name: 'Banding', color: 'palette:violet' },
+      { id: 'local-b2', name: 'Nets', color: 'palette:teal', parent: 'local-b1' },
+      { id: 'local-d1', name: 'Shared child', color: 'palette:red', parent: 'copper-finch' }
+    ], shared)
+    expect(nested.map((group) => [group.name, group.parent ?? null])).toEqual([['Garden', null], ['Banding', null], ['Ringing', 'local-a1'], ['Nets', null], ['Shared child', null]])
+    const merged = mergedGroups(shared, nested)
+    expect(merged.find((group) => group.name === 'Ringing')).toMatchObject({ local: true, parent: 'local-a1' })
+    const items = [item('own', { groupId: 'local-a1' }), item('sub', { groupId: 'local-b1' }), item('other', { groupId: 'local-c1' }), item('none', {})]
+    expect(visibleItems(items, merged, ['local-a1'], []).map((entry) => entry.id)).toEqual(['other', 'none'])
+    expect(visibleItems(items, merged, ['local-b1'], []).map((entry) => entry.id)).toEqual(['own', 'other', 'none'])
   })
 
   it('counts events per own group', () => {
@@ -160,5 +176,38 @@ describe('Calendar own groups with the host', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add' })) })
     expect(screen.getByText('A group with that name already exists.')).toBeInTheDocument()
     expect(mock.api.settings.get().localGroups).toHaveLength(2)
+  })
+
+  it('adds a subgroup from the + of an own group, counts its events under the group and keeps both from removal', async () => {
+    const mock = setup({ localGroups: [
+      { id: 'local-0f9e8d7c6b5a', name: 'Errands', color: 'palette:blue' },
+      { id: 'local-1a2b3c4d5e6f', name: 'Post', color: 'palette:green', parent: 'local-0f9e8d7c6b5a' },
+      { id: 'local-aaaaaaaaaaaa', name: 'Garden', color: 'palette:red' }
+    ] })
+    events.list = [{ id: 'c', groupId: 'local-1a2b3c4d5e6f' }]
+    const { Settings } = await import('../src/Settings')
+    render(React.createElement(Settings))
+    const row = (name: string): Element => screen.getByDisplayValue(name).closest('.settings-colorrule-row')!
+    await screen.findByDisplayValue('Post')
+    expect(row('Post')).toHaveClass('settings-group-sub')
+    expect(row('Errands')).not.toHaveClass('settings-group-sub')
+    expect(screen.queryByRole('button', { name: 'Add subgroup to Post' })).toBeNull()
+    await vi.waitFor(() => expect(row('Errands').querySelector('.settings-group-usage')).toHaveTextContent('1'))
+    expect(screen.getByRole('button', { name: 'Remove Errands' })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('button', { name: 'Remove Garden' })).not.toHaveAttribute('aria-disabled')
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add subgroup to Errands' })) })
+    const input = screen.getByRole('textbox', { name: 'New subgroup' })
+    expect(input).toHaveFocus()
+    expect(input.closest('.settings-colorrule-row')!.previousElementSibling).toBe(row('Post'))
+    fireEvent.change(input, { target: { value: 'Bank' } })
+    await act(async () => { fireEvent.blur(input) })
+    const saved = (): Array<[string, string | null]> => (mock.api.settings.get().localGroups as LocalGroup[]).map((group) => [group.name, group.parent ?? null])
+    expect(saved()).toEqual([['Errands', null], ['Post', 'local-0f9e8d7c6b5a'], ['Bank', 'local-0f9e8d7c6b5a'], ['Garden', null]])
+    expect(screen.queryByRole('textbox', { name: 'New subgroup' })).toBeNull()
+
+    // Keyboard reordering keeps a subgroup under its group.
+    await act(async () => { fireEvent.keyDown(row('Bank').querySelector('.settings-colorrule-grip')!, { key: 'ArrowUp' }) })
+    expect(saved()).toEqual([['Errands', null], ['Bank', 'local-0f9e8d7c6b5a'], ['Post', 'local-0f9e8d7c6b5a'], ['Garden', null]])
   })
 })

@@ -1,13 +1,14 @@
 /**
  * Calendar's own groups in Settings: the same list as Settings → Appearance →
- * Groups (grip, name, colour, usage, remove, and an add row on the same
- * columns). A group is deleted only once no event uses it, like a shared group.
+ * Groups (grip, name, colour, add subgroup, usage, remove, and an add row on the
+ * same columns). A group is deleted only once no event uses it and it has no
+ * subgroups, like a shared group.
  */
 import { React, api } from './runtime'
 import type { ReactElement } from 'react'
 import type { EventRecord } from '@valley/plugin-sdk/types'
-import { groupKey, nextGroupColor } from '@valley/plugin-sdk/groups'
-import { GripVertical, X } from './icons'
+import { groupFamily, groupKey, nextGroupColor, placeGroup, resolveGroupDrop, stepGroup, subgroupsOf, type GroupPlacement } from '@valley/plugin-sdk/groups'
+import { GripVertical, Plus, X } from './icons'
 import { uiText } from './localization'
 import { setLocalGroups } from './groups'
 import { useCalendarSettings } from './settingsStore'
@@ -90,13 +91,71 @@ export function LocalGroupsSettings(): ReactElement {
     setSaveError(!ok)
     return ok
   }
+  // A group's count covers its subgroups, like a shared group's.
+  const total = (group: LocalGroup): number => groupFamily(local, group).reduce((sum, member) => sum + (usage[member.id] ?? 0), 0)
+  // A pointer this far right of a row's left edge asks for a subgroup where the slot allows both levels.
+  const NEST_OFFSET = 28
+  const [nest, setNest] = React.useState(false)
+  const [subgroupOf, setSubgroupOf] = React.useState<string | null>(null)
+  const [subColor, setSubColor] = React.useState(() => nextGroupColor(groups))
+  const [subDuplicate, setSubDuplicate] = React.useState(false)
+  const subRow = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => { if (subgroupOf) subRow.current?.querySelector('input')?.focus() }, [subgroupOf])
+  const place = (id: string, placement: GroupPlacement | null): void => {
+    if (!placement) return
+    let next: LocalGroup[]
+    try { next = placeGroup(local, id, placement) } catch { return }
+    if (next.every((group, index) => group.id === local[index]?.id && group.parent === local[index]?.parent)) return
+    void save(next)
+  }
   const reorder = useReorderDrag({
     items: local,
     indicatorOnly: true,
     getId: (group) => group.id,
     getLabel: (group) => group.name,
-    onReorder: (next) => { void save(next) }
+    // Pointer drops are resolved in `dropProps`; this is the keyboard path, which keeps a group on its level.
+    onReorder: (_next, move) => {
+      const edge = move.position === 'before' ? local[0]?.id : local.at(-1)?.id
+      place(move.activeId, stepGroup(local, move.activeId, move.position, move.overId === edge))
+    }
   })
+  const wantsNest = (event: React.DragEvent<HTMLElement>): boolean => event.clientX > event.currentTarget.getBoundingClientRect().left + NEST_OFFSET
+  const dropProps = (group: LocalGroup): ReturnType<typeof reorder.getItemProps> => {
+    const props = reorder.getItemProps(group)
+    return {
+      ...props,
+      onDragOver: (event) => { props.onDragOver?.(event); setNest(wantsNest(event)) },
+      onDrop: (event) => {
+        const dragId = reorder.activeId ?? event.dataTransfer.getData('text/plain')
+        if (!dragId) return
+        event.preventDefault()
+        const rect = event.currentTarget.getBoundingClientRect()
+        place(dragId, resolveGroupDrop(local, dragId, group.id, event.clientY < rect.top + rect.height / 2 ? 'before' : 'after', wantsNest(event)))
+        reorder.cancel()
+      }
+    }
+  }
+  // The insertion line sits where the group will land, indented when it lands as a subgroup.
+  const target = reorder.activeId && reorder.overId && reorder.dropPosition
+    ? resolveGroupDrop(local, reorder.activeId, reorder.overId, reorder.dropPosition, nest)
+    : null
+  const dropClass = (group: LocalGroup, index: number): string => {
+    if (!target) return ''
+    const nested = target.parent !== null ? ' drop-nested' : ''
+    if (target.before !== null) return target.before === group.id ? ` drop-before${nested}` : ''
+    const scope = target.parent === null ? local : local.filter((entry) => entry.id === target.parent || entry.parent === target.parent)
+    const last = scope.filter((entry) => entry.id !== reorder.activeId && entry.parent !== reorder.activeId).at(-1) ?? local[index]
+    return last.id === group.id ? ` drop-after${nested}` : ''
+  }
+  const addSubgroup = async (value: string): Promise<void> => {
+    const name = value.trim().slice(0, LOCAL_GROUP_NAME_MAX)
+    if (!subgroupOf || !name || local.length >= LOCAL_GROUP_LIMIT) { setSubgroupOf(null); return }
+    if (taken(name)) { setSubDuplicate(true); return }
+    const created: LocalGroup = { id: newLocalGroupId(), name, color: subColor }
+    let next: LocalGroup[]
+    try { next = placeGroup([...local, created], created.id, { parent: subgroupOf, before: null }) } catch { setSubgroupOf(null); return }
+    if (await save(next)) setSubgroupOf(null)
+  }
   const update = (id: string, change: (group: LocalGroup) => LocalGroup): void => {
     void save(local.map((group) => group.id === id ? change(group) : group))
   }
@@ -126,13 +185,17 @@ export function LocalGroupsSettings(): ReactElement {
           // remounts them; otherwise they keep the values of the row that was there.
           const slot = `${group.id}@${index}`
           const handleProps = reorder.getHandleProps(group)
-          const count = usage[group.id] ?? 0
+          const subgroups = subgroupsOf(local, group.id).length
+          const count = group.parent ? usage[group.id] ?? 0 : total(group)
+          const blocked = count > 0 || subgroups > 0
+          const draftHere = subgroupOf !== null && (local[index + 1]?.parent ?? null) !== subgroupOf
+            && (group.id === subgroupOf || group.parent === subgroupOf)
           return (
+            <React.Fragment key={group.id}>
             <div
               role="listitem"
-              key={group.id}
-              className={`settings-colorrule-row${reorder.overId === group.id ? ` drop-${reorder.dropPosition ?? 'before'}` : ''}`}
-              {...reorder.getItemProps(group)}
+              className={`settings-colorrule-row${group.parent ? ' settings-group-sub' : ''}${dropClass(group, index)}`}
+              {...dropProps(group)}
             >
               <button {...handleProps} className={`${handleProps.className ?? ''} settings-colorrule-grip`}>
                 <GripVertical aria-hidden="true" />
@@ -153,6 +216,19 @@ export function LocalGroupsSettings(): ReactElement {
                 onChange={(color) => update(group.id, (current) => ({ ...current, color }))}
                 ariaLabel={uiText('calendar.localGroups.colorOf', { p0: group.name })}
               />
+              {group.parent
+                ? <span aria-hidden="true" />
+                : (
+                  <IconButton
+                    key={`addsub:${slot}`}
+                    className="settings-group-addsub"
+                    ariaLabel={uiText('calendar.localGroups.subgroupAddTo', { p0: group.name })}
+                    title={uiText('calendar.localGroups.subgroupAdd')}
+                    onClick={() => { setSubDuplicate(false); setSubColor(nextGroupColor(groups)); setSubgroupOf(group.id) }}
+                  >
+                    <Plus />
+                  </IconButton>
+                )}
               <span
                 className="settings-group-usage"
                 aria-label={uiText('calendar.localGroups.usage', { p0: String(count) })}
@@ -161,14 +237,34 @@ export function LocalGroupsSettings(): ReactElement {
               <IconButton
                 key={`remove:${slot}`}
                 className="settings-colormap-remove"
-                aria-disabled={count > 0 || undefined}
+                aria-disabled={blocked || undefined}
                 ariaLabel={uiText('calendar.localGroups.removeOf', { p0: group.name })}
-                title={count > 0 ? uiText('calendar.localGroups.removeBlocked', { p0: String(count) }) : uiText('calendar.localGroups.remove')}
-                onClick={() => { if (count === 0) void save(local.filter((candidate) => candidate.id !== group.id)) }}
+                title={count > 0 ? uiText('calendar.localGroups.removeBlocked', { p0: String(count) }) : subgroups > 0 ? uiText('calendar.localGroups.removeSubgroups') : uiText('calendar.localGroups.remove')}
+                onClick={() => { if (!blocked) void save(local.filter((candidate) => candidate.id !== group.id)) }}
               >
                 <X />
               </IconButton>
             </div>
+            {draftHere && (
+              <div ref={subRow} className="settings-colorrule-row settings-group-sub">
+                <span className="settings-colorrule-grip settings-colorrule-grip-placeholder" aria-hidden="true" />
+                <NameInput
+                  initial=""
+                  placeholder={uiText('calendar.localGroups.subgroupNew')}
+                  ariaLabel={uiText('calendar.localGroups.subgroupNew')}
+                  invalid={subDuplicate}
+                  onType={() => setSubDuplicate(false)}
+                  onCommit={(value) => { void addSubgroup(value) }}
+                />
+                <ColorField
+                  key={`sub-color:${subgroupOf}`}
+                  value={subColor}
+                  onChange={setSubColor}
+                  ariaLabel={uiText('calendar.localGroups.newColor')}
+                />
+              </div>
+            )}
+            </React.Fragment>
           )
         })}
         {reorder.liveRegion}
@@ -190,6 +286,7 @@ export function LocalGroupsSettings(): ReactElement {
             onChange={setDraftColor}
             ariaLabel={uiText('calendar.localGroups.newColor')}
           />
+          <span aria-hidden="true" />
           <span className="settings-colorrule-add-action">
             <span className="settings-button settings-button--medium settings-colorrule-add-sizer" aria-hidden="true">{uiText('calendar.localGroups.add')}</span>
             <Button className="settings-colormap-add-btn" disabled={local.length >= LOCAL_GROUP_LIMIT} onClick={() => void add()}>
@@ -197,7 +294,7 @@ export function LocalGroupsSettings(): ReactElement {
             </Button>
           </span>
         </div>
-        {duplicate && <span className="settings-empty-text">{uiText('calendar.localGroups.duplicate')}</span>}
+        {(duplicate || subDuplicate) && <span className="settings-empty-text">{uiText('calendar.localGroups.duplicate')}</span>}
       </div>
       </div>
     </Section>

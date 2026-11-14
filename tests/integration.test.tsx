@@ -391,9 +391,9 @@ describe('normalizeEventRecord', () => {
       { id: 'open-attachment', label: 'Attachment', submenu: [{ label: 'fern-sheet.pdf' }] },
       { id: 'open-link', label: 'Link', submenu: [{ label: 'https://example.com/fern' }] }
     ])
-    await menu[0].submenu?.[0].onSelect?.()
-    await menu[1].submenu?.[0].onSelect?.()
-    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Archive/fern-sheet.pdf', undefined, { newTab: undefined })
+    await menu[0].submenu?.[0].onSelect?.({ newTab: false })
+    await menu[1].submenu?.[0].onSelect?.({ newTab: false })
+    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Archive/fern-sheet.pdf', undefined, { newTab: false })
     expect(mock.api.links.open).toHaveBeenCalledWith('https://example.com/fern')
   })
 })
@@ -962,7 +962,7 @@ describe('Calendar action menu schema', () => {
     let view!: ReturnType<typeof render>
     await act(async () => { view = render(<>{entries.map((action, index) => <span key={index}>{action.icon}</span>)}</>) })
     expect(view.container.querySelectorAll('svg')).toHaveLength(entries.length)
-    await act(async () => { nested[0].onSelect?.() })
+    await act(async () => { nested[0].onSelect?.({ newTab: false }) })
     expect(runAction).toHaveBeenCalledWith('birthday', 'inspect')
   })
 
@@ -1241,13 +1241,13 @@ describe('Calendar item clicks', () => {
     expect(mock.menus.at(-1)?.find((item) => item.label === 'Edit')?.icon).toBeTruthy()
     expect(mock.menus.at(-1)?.find((item) => item.label === 'Delete')?.icon).toBeTruthy()
     expect(mock.api.workspace.openFile).not.toHaveBeenCalled()
-    await act(async () => { await mock.menus.at(-1)?.find((item) => item.label === 'Edit')?.onSelect?.(); await new Promise(resolve => setTimeout(resolve, 10)) })
+    await act(async () => { await mock.menus.at(-1)?.find((item) => item.label === 'Edit')?.onSelect?.({ newTab: false }); await new Promise(resolve => setTimeout(resolve, 10)) })
     expect(ownerEdit).toHaveBeenCalledWith('t1')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
     const openNote = mock.menus.at(-1)?.find((item) => item.label === 'Open note')
     expect(openNote).toBeTruthy()
-    await act(async () => { await openNote?.onSelect?.() })
+    await act(async () => { await openNote?.onSelect?.({ newTab: false }) })
     expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Notes/Field Survey.md')
   })
 
@@ -1274,7 +1274,7 @@ describe('Calendar item clicks', () => {
     const title = await screen.findByText('Canopy survey')
     fireEvent.contextMenu(title)
     await waitFor(() => expect(mock.menus.at(-1)?.some((item) => item.label === 'Edit')).toBe(true))
-    await act(async () => { await mock.menus.at(-1)?.find((item) => item.label === 'Edit')?.onSelect?.(); await new Promise(resolve => setTimeout(resolve, 10)) })
+    await act(async () => { await mock.menus.at(-1)?.find((item) => item.label === 'Edit')?.onSelect?.({ newTab: false }); await new Promise(resolve => setTimeout(resolve, 10)) })
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
@@ -1482,7 +1482,7 @@ describe('Calendar item clicks', () => {
     await waitFor(() => expect(mock.menus.at(-1)?.map((item) => item.label)).toContain('Open in To-Do'))
     const openInTodo = mock.menus.at(-1)?.find((item) => item.label === 'Open in To-Do')
     expect(openInTodo?.icon).toBeTruthy()
-    await act(async () => { await openInTodo?.onSelect?.() })
+    await act(async () => { await openInTodo?.onSelect?.({ newTab: false }) })
 
     expect(opened).toHaveBeenCalledWith('owned')
     expect(mock.api.workspace.revealOwnPanel).toHaveBeenCalledWith('left_sidebar')
@@ -1850,12 +1850,12 @@ describe('AgendaPanel item clicks', () => {
     fireEvent.contextMenu(await screen.findByText('Fern task'))
     await waitFor(() => expect(mock.menus.at(-1)?.map(entry => entry.label)).toEqual(['Edit', 'Open in Calendar', 'Open in To-Do']))
     const menu = mock.menus.at(-1)!
-    await act(async () => { await menu[0].onSelect?.() })
+    await act(async () => { await menu[0].onSelect?.({ newTab: false }) })
     expect(edit).toHaveBeenCalledWith('owned')
     expect(mock.popovers).toHaveLength(0)
-    await act(async () => { await menu[1].onSelect?.() })
+    await act(async () => { await menu[1].onSelect?.({ newTab: false }) })
     expect(revealTargetStore().get()).toMatchObject({ surface: 'main', itemId: 'owned' })
-    await act(async () => { await menu[2].onSelect?.() })
+    await act(async () => { await menu[2].onSelect?.({ newTab: false }) })
     expect(providerOpen).toHaveBeenCalledWith('owned')
   })
 
@@ -1887,9 +1887,9 @@ describe('AgendaPanel item clicks', () => {
     const openNote = mock.menus.at(-1)?.find((entry) => entry.id === 'open-note')
     expect(openNote).toBeTruthy()
     await act(async () => {
-      await openNote?.onSelect?.()
+      await openNote?.onSelect?.({ newTab: false })
     })
-    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Notes/Event.md', undefined, { newTab: undefined })
+    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Notes/Event.md', undefined, { newTab: false })
   })
 })
 
@@ -2055,8 +2055,8 @@ describe('Note dates on the calendar', () => {
     expect(menu.filter(item => item.type !== 'separator').every(item => item.icon)).toBe(true)
     const open = menu.find((m) => m.label === 'Open note')
     expect(open).toBeTruthy()
-    open?.onSelect?.()
-    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Biodiversity/Fern.md', undefined, { newTab: undefined })
+    open?.onSelect?.({ newTab: false })
+    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Biodiversity/Fern.md', undefined, { newTab: false })
     ;(open?.onSelect as ((context?: { newTab?: boolean }) => unknown) | undefined)?.({ newTab: true })
     expect(mock.api.workspace.openFile).toHaveBeenLastCalledWith('Biodiversity/Fern.md', undefined, { newTab: true })
   })
@@ -2127,7 +2127,7 @@ describe('Note dates settings section', () => {
       'blank'
     ])
     await act(async () => {
-      await menu.find((entry) => entry.id === 'blank')?.onSelect?.()
+      await menu.find((entry) => entry.id === 'blank')?.onSelect?.({ newTab: false })
     })
 
     // Prefilled defaults land in the row and are persisted to the durable dataset.
@@ -2149,7 +2149,7 @@ describe('Note dates settings section', () => {
       fireEvent.click(add)
     })
     await act(async () => {
-      await mock.menus.at(-1)?.find((entry) => entry.id === 'birthdays')?.onSelect?.()
+      await mock.menus.at(-1)?.find((entry) => entry.id === 'birthdays')?.onSelect?.({ newTab: false })
     })
 
     await waitFor(() => {

@@ -35,6 +35,8 @@ interface CalendarFilterOption {
   color?: string
   icon?: ReactNode
   count?: number
+  /** A subgroup: the row sits indented under its group. */
+  sub?: boolean
 }
 
 /** Which source contributed an item — the id the sources filter switches off. */
@@ -62,7 +64,8 @@ export function visibleItems(
     if (hiddenSourceIds.has(itemSourceId(item))) return false
     if (hiddenGroupIds.size === 0) return true
     const group = groupOfItem(item, groups)
-    return !group || !hiddenGroupIds.has(group.id)
+    // A switched-off group takes its subgroups with it.
+    return !group || !(hiddenGroupIds.has(group.id) || (group.parent !== undefined && hiddenGroupIds.has(group.parent)))
   })
 }
 
@@ -122,7 +125,7 @@ export function CalendarFilterList({
       {onOpenSettings && <button type="button" onClick={onOpenSettings}>{uiText('calendar.properties.manageGroups')}</button>}
       {options.length > 0 && <button type="button" disabled={saving} onClick={toggleAll}>{uiText(selected === options.length ? 'calendar.filter.deselectAll' : 'calendar.filter.selectAll')}</button>}
     </div>
-    <dl className="props-info-table calendar-filter-properties">{options.map((option) => <div className="props-info-row calendar-filter-property-row" key={option.id}>
+    <dl className="props-info-table calendar-filter-properties">{options.map((option) => <div className={`props-info-row calendar-filter-property-row${option.sub ? ' calendar-filter-sub' : ''}`} key={option.id}>
       <dt className="props-info-key">
         {option.icon && <span className="calendar-filter-property-glyph" style={option.color ? { color: paletteCssValue(option.color) } : undefined}>{option.icon}</span>}
         {!option.icon && option.color && <span className="props-info-dot" style={{ background: paletteCssValue(option.color) }} />}
@@ -161,7 +164,7 @@ export function CalendarFilterList({
               <button
                 key={option.id}
                 type="button"
-                className={`calendar-filter-option${selectionRunClass(visiblySelected, index)}`}
+                className={`calendar-filter-option${option.sub ? ' calendar-filter-sub' : ''}${selectionRunClass(visiblySelected, index)}`}
                 aria-pressed={active}
                 onClick={() => flip(option.id)}
               >

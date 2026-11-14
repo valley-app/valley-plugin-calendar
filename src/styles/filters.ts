@@ -268,4 +268,10 @@ export const inlineFilterStyles = `.calendar-filter-inline-rows {
 .calendar-legend-chip.off { opacity: 0.4; text-decoration: line-through; }
 .calendar-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
+
+/* A subgroup sits indented under its group in the Groups filter. */
+.calendar-filter-option.calendar-filter-sub .calendar-legend-dot,
+.calendar-filter-property-row.calendar-filter-sub .props-info-dot {
+  margin-left: 14px;
+}
 `

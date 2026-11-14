@@ -314,7 +314,7 @@ export function AgendaPanel(): ReactElement {
         />}
         {filterPanel === 'groups' && <CalendarFilterList
           label={uiText('calendar.filter.groups')}
-          options={calendarGroups.map((group) => ({ id: group.id, label: group.name, color: group.color, count: groupCounts[group.id] ?? 0 }))}
+          options={calendarGroups.map((group) => ({ id: group.id, label: group.name, color: group.color, count: groupCounts[group.id] ?? 0, sub: group.parent !== undefined }))}
           hidden={hiddenGroups}
           settingsKey={HIDDEN_GROUPS_KEY}
           emptyText={uiText('calendar.filter.noGroups')}

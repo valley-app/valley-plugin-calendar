@@ -309,7 +309,7 @@ function Overview({ view, sources = false }: { view?: PluginLinkState; sources?:
 
 function GroupProperties(): React.ReactElement {
   const settings = useCalendarSettings()
-  return <div className="right-panel-body props-info"><CalendarFilterList embedded label={uiText('calendar.filter.groups')} options={settings.groups.map((group) => ({ id: group.id, label: group.name, color: group.color }))} hidden={settings.hiddenGroups} settingsKey={HIDDEN_GROUPS_KEY} emptyText={uiText('calendar.overview.none')} onOpenSettings={() => api.workspace.openOwnSettings()} /></div>
+  return <div className="right-panel-body props-info"><CalendarFilterList embedded label={uiText('calendar.filter.groups')} options={settings.groups.map((group) => ({ id: group.id, label: group.name, color: group.color, sub: group.parent !== undefined }))} hidden={settings.hiddenGroups} settingsKey={HIDDEN_GROUPS_KEY} emptyText={uiText('calendar.overview.none')} onOpenSettings={() => api.workspace.openOwnSettings()} /></div>
 }
 
 function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkState }): React.ReactElement {
