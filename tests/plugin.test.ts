@@ -79,3 +79,21 @@ it('updates event documents without fetching tag relations that the document tra
   expect(update.mock.calls[0][1]).toMatchObject({ body: 'New note', explicitTags: ['flora/äste'] })
   expect((await loadEvents())[0]).toMatchObject({ note: 'New note', tags: ['flora/äste'] })
 })
+
+it('declares every interop contract it provides, or the host refuses the whole UI', () => {
+  const mock = createMockValleyApi({ manifest: { id: 'calendar' } })
+  const provided = new Set<string>()
+  for (const area of ['extensions', 'services', 'state'] as const) {
+    const target = mock.api.interop[area] as unknown as { provide?: (contract: { id: string; version: string }, ...rest: unknown[]) => unknown; publish?: (contract: { id: string; version: string }, ...rest: unknown[]) => unknown }
+    const method = target.provide ? 'provide' : 'publish'
+    if (!target[method]) continue
+    const original = target[method]!.bind(target)
+    target[method] = (contract, ...rest) => { provided.add(`${contract.id}@${contract.version}`); return original(contract, ...rest) }
+  }
+  const dispose = register(mock.api)
+  const declared = new Set((CONFIG.provides as Array<{ id: string; version: string }>).map((entry) => `${entry.id}@${entry.version}`))
+  expect(provided.has('workspace.details@1.0.0')).toBe(true)
+  expect([...provided].filter((contract) => !declared.has(contract))).toEqual([])
+  void dispose?.()
+})
+

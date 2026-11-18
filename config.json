@@ -497,6 +497,11 @@
       "id": "workspace.bookmark",
       "kind": "service",
       "version": "1.0.0"
+    },
+    {
+      "id": "workspace.details",
+      "kind": "extension",
+      "version": "1.0.0"
     }
   ],
   "consumes": [
