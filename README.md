@@ -80,3 +80,7 @@ The backend publishes `workflow.provider` version `1.0.0` through the injected S
 The interface and Workflow use the same serialized backend writer. Revision-guarded document updates preserve event relationships, while existing undo and readonly rules remain in effect. Events follow successful commits and retain the host's causal context. A Workflow action with a delivery failure after commit reports an uncertain outcome and must not be retried automatically. Interface saves retain their successful result and undo entry, with a separate event-delivery warning. Calendar must be installed and enabled; integrations never read another plugin's data files.
 
 Event list already emits one execution item per local event. No collection selector is declared; reminders, tags, URLs and attachments remain event attributes.
+
+## When the backend runs
+
+The Calendar backend starts on first use and stops after ten idle minutes. Reminders are scheduled with the host, which wakes the backend for its own notification occurrences, actions and rings, for changes of the `calendar.events` dataset, its settings, `.ics`, `.ifb` and `.vcs` files and system resume, and at local midnight (a host wake time) for the next day's pass.

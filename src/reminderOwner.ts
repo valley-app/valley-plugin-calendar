@@ -15,6 +15,7 @@ export function reminderTimes(record: EventRecord, defaults: number[] = [10]): {
 }
 
 const CALENDAR_FILE = /\.(?:ics|ifb|vcs)$/i
+const DAY_WAKE = 'calendar.day'
 const touchesCalendarFile = (change: { paths: string[]; oldPath?: string; newPath?: string }): boolean =>
   [...change.paths, change.oldPath, change.newPath].some(path => typeof path === 'string' && CALENDAR_FILE.test(path))
 
@@ -73,11 +74,13 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
     }
     live()
     const indexed = files.getSnapshot()
-    if (indexed.status !== 'ready') return
+    // Without a ready file index the calendar-file alarms are unknown, not gone: keep their keys and still reconcile the
+    // dataset reminders below (an early return here used to leave a deleted event's reminder scheduled).
+    if (indexed.status !== 'ready') for (const key of keys) if (key.startsWith('reminder:file:')) wanted.push(key)
     const now = Date.now()
     const from = new Date(now - 7 * 86400000).toISOString().slice(0, 10)
     const to = new Date(now + 90 * 86400000).toISOString().slice(0, 10)
-    for (const file of indexed.entries.filter(file => !file.excluded)) {
+    for (const file of indexed.status === 'ready' ? indexed.entries.filter(file => !file.excluded) : []) {
       live()
       const content = await api.realm.read(file.relPath)
       if (!content) continue
@@ -119,13 +122,18 @@ export function startReminderOwner(api: PluginBackendApi, list: () => Promise<Ev
     return result
   })
   // Alarms live in the host's scheduler; only the 90-day window of file alarms and local wall-clock times move by themselves.
+  // The day boundary is a host wake time (lifecycle.wakeAt), so the backend may sleep in between; a host without it keeps the
+  // in-guest timer.
   let dayTimer: ReturnType<typeof setTimeout> | undefined
+  const nextMidnight = (): number => { const now = new Date(); return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() + 1000 }
+  const hostWake = typeof api.lifecycle.wakeAt === 'function' && typeof api.lifecycle.onWake === 'function'
   const nextDay = (): void => {
-    const now = new Date()
-    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime()
-    dayTimer = setTimeout(() => { if (!active) return; reconcile(); nextDay() }, Math.max(1000, midnight - now.getTime() + 1000))
+    if (!active) return
+    if (hostWake) { void api.lifecycle.wakeAt(DAY_WAKE, nextMidnight()).catch(() => { if (active) api.rpc.emit('reminders.error', { code: 'REMINDER_DAY_WAKE_FAILED' }) }); return }
+    dayTimer = setTimeout(() => { if (!active) return; reconcile(); nextDay() }, Math.max(1000, nextMidnight() - Date.now()))
   }
+  const offWake = hostWake ? api.lifecycle.onWake(event => { if (event.key === DAY_WAKE && active) { reconcile(); nextDay() } }) : () => {}
   nextDay()
   reconcile()
-  return async () => { active = false; clearTimeout(dayTimer); offFiles(); offRealm(); await files.dispose().catch(() => {}); offData(); offSettings(); offResume(); offOccurrence(); offAction(); await pending.catch(() => {}) }
+  return async () => { active = false; clearTimeout(dayTimer); offWake(); offFiles(); offRealm(); await files.dispose().catch(() => {}); offData(); offSettings(); offResume(); offOccurrence(); offAction(); await pending.catch(() => {}) }
 }

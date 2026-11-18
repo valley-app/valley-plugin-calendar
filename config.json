@@ -2818,9 +2818,29 @@
     ],
     "activation": {
       "backend": [
-        "background",
         "capability"
-      ]
+      ],
+      "wake": {
+        "notifications": true,
+        "datasets": [
+          "calendar.events"
+        ],
+        "settings": true,
+        "resume": true,
+        "timers": true,
+        "realm": [
+          {
+            "extensions": [
+              "ics",
+              "ifb",
+              "vcs"
+            ]
+          }
+        ]
+      },
+      "idle": {
+        "stopAfterMs": 600000
+      }
     },
     "largeDataOperations": [
       "workflow.execute"
@@ -2852,6 +2872,7 @@
   },
   "permissions": {
     "storage": {
+      "realm": true,
       "metadata": [
         "assets/icons/calendar-icon"
       ]

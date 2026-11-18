@@ -11,22 +11,26 @@ import { WeekGrid } from '../src/WeekGrid'
 
 const settle = async (): Promise<void> => { for (let index = 0; index < 20; index++) await vi.advanceTimersByTimeAsync(0) }
 
-function owner(records: EventRecord[] = []) {
+function owner(records: EventRecord[] = [], options: { hostWake?: boolean; index?: 'refused' } = {}) {
   const mock = createMockValleyApi({ manifest: { id: 'calendar' } })
+  const wakes = new Map<string, number | null>()
+  let onWake: ((event: { key: string; at: number; firedAt: number; late: boolean }) => void) | undefined
   const listeners: { realm?: (info: unknown) => void; settings?: () => void; resume?: () => void } = {}
   const write = vi.fn(async () => ({ ok: true }))
   const api = {
     ...mock.api,
     realm: { ...mock.api.realm, read: vi.fn(async () => null), onChanged: (listener: (info: unknown) => void) => { listeners.realm = listener; return () => {} } },
     settings: { get: () => ({}), subscribe: (listener: () => void) => { listeners.settings = listener; return () => {} } },
-    lifecycle: { onResume: (listener: () => void) => { listeners.resume = listener; return () => {} } },
+    lifecycle: { onResume: (listener: () => void) => { listeners.resume = listener; return () => {} },
+      ...(options.hostWake ? { wakeAt: vi.fn(async (key: string, at: number | null) => { wakes.set(key, at) }), onWake: (listener: NonNullable<typeof onWake>) => { onWake = listener; return () => { onWake = undefined } } } : {}) },
+    ...(options.index === 'refused' ? { index: { ...mock.api.index, observe: async () => { throw new Error('Realm access is not declared') } } } : {}),
     data: { dataset: () => ({ subscribe: () => () => {} }), files: { readText: async () => null, readTextBaseline: async () => null, writeTextGuarded: write } },
     notifications: { schedule: vi.fn(async () => {}), cancel: vi.fn(async () => {}), onOccurrence: () => () => {} },
     i18n: { t: (key: string) => key },
     rpc: { handle: () => () => {}, emit: vi.fn() }
   } as unknown as PluginBackendApi
   const list = vi.fn(async () => records)
-  return { api, list, listeners, write, stop: startReminderOwner(api, list) }
+  return { api, list, listeners, write, wakes, wake: (key: string, at: number) => onWake?.({ key, at, firedAt: Date.now(), late: false }), stop: startReminderOwner(api, list) }
 }
 
 const event = (id: string): EventRecord => ({ id, title: id, date: '2026-11-20', startTime: '09:00', note: '' } as EventRecord)
@@ -112,6 +116,41 @@ describe('Calendar reminder owner at idle', () => {
     listeners.settings!()
     await settle()
     expect(list).toHaveBeenCalledTimes(reads)
+  })
+
+  it('leaves the day boundary to a host wake time when the host offers one, and arms no timer of its own (GODS G6)', async () => {
+    const { list, wakes, wake, stop } = owner([], { hostWake: true })
+    await settle()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(wakes.get('calendar.day')).toBe(new Date(2026, 10, 10).getTime() + 1000)
+    const start = list.mock.calls.length
+    vi.setSystemTime(new Date(2026, 10, 10, 0, 0, 1))
+    wake('other.key', Date.now())
+    await settle()
+    expect(list).toHaveBeenCalledTimes(start)
+    wake('calendar.day', Date.now())
+    await settle()
+    expect(list).toHaveBeenCalledTimes(start + 1)
+    expect(wakes.get('calendar.day')).toBe(new Date(2026, 10, 11).getTime() + 1000)
+    await stop()
+    wake('calendar.day', Date.now())
+    await settle()
+    expect(list).toHaveBeenCalledTimes(start + 1)
+  })
+
+  it('cancels a deleted event\'s reminder even when the calendar-file index is unavailable, and keeps file alarms it cannot see', async () => {
+    const records = [event('a'), event('b')]
+    const { api, write, listeners, stop } = owner(records, { index: 'refused' })
+    await settle()
+    expect(write).toHaveBeenCalledTimes(1)
+    const saved = JSON.parse((write.mock.calls[0] as unknown as [string, string])[1]) as { keys: string[] }
+    expect(saved.keys.sort()).toEqual(['reminder:a:10', 'reminder:b:10'])
+    records.splice(1, 1)
+    listeners.settings!()
+    await settle()
+    expect(api.notifications.cancel).toHaveBeenCalledWith('reminder:b:10')
+    expect(write).toHaveBeenCalledTimes(2)
+    await stop()
   })
 
   it('arms no timer after stopping', async () => {
