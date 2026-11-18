@@ -7,7 +7,7 @@ import { calendarItemKey, type CalItem } from './items'
 import { calendarLinkPatch, calendarLinkState, calendarViewMode, defaultTimeControl, saveCalendarViewMode } from './timeControl'
 import { onChanged } from './events'
 import { groupOfItem } from './localGroups'
-import { EVENTS_SOURCE_ID, HIDDEN_SOURCES_KEY, NO_GROUP_ID, NOTE_DATES_SOURCE_ID, readCalendarSettings, useCalendarSettings } from './settingsStore'
+import { EVENTS_SOURCE_ID, HIDDEN_SOURCES_KEY, NO_GROUP_ID, NOTE_DATES_SOURCE_ID, TABLE_VIEW_KEY, readCalendarSettings, useCalendarSettings } from './settingsStore'
 import { uiText } from './localization'
 import { resolveCalendarTarget } from './commands'
 import { useCalendarItems } from './useCalendarItems'
@@ -17,11 +17,13 @@ import { paletteCssValue } from '@valley/plugin-sdk/palette'
 import { parseAppOpenUrl } from '@valley/plugin-sdk/paths'
 import { AttachmentCard, openLocation } from './fields'
 import { formatReminderTime } from './ReminderOffsets'
-import { Bell, ChevronDown, Clock, Flag, Link, MapPin } from './icons'
+import { Bell, ChevronDown, Clock, Flag, Link, TableGlyph } from './icons'
+import { ItemLocation } from './LocationMap'
+import { registerCalendarDetails } from './details'
 import { addDays, isoDay, isoWeek, localizedMonth, parseLocalDate, startOfWeek } from './dateMath'
 import { WEEK_START_INDEX } from './lib'
 import { subscribeHostField } from './hooks'
-import type { InteropValueSchema } from '@valley/plugin-sdk'
+import type { InteropValueSchema, UiMenuItem } from '@valley/plugin-sdk'
 
 const bookmarkStateSchema = {
   "type": "object",
@@ -205,16 +207,30 @@ function itemState(item: CalItem, surface: SlotId): PluginLinkState {
   return { ...calendarLinkState({ ...state().time, view: calendarViewMode(surface, state().views.get(surface) ?? state().time.view) }), itemId: item.id, kind: item.kind, date: item.date, sourceId: item.sourceId ?? '', filePath: item.filePath ?? '' }
 }
 
+/** The entry a surface selected, as it was drawn: note dates and file entries carry their title, colour and fields only there. */
+function selectedEntry(raw: PluginLinkState): CalItem | undefined {
+  for (const item of state().selected.values()) {
+    if (item.id === raw.itemId && item.kind === raw.kind && (raw.date === undefined || item.date === raw.date)) return item
+  }
+  return undefined
+}
+
 async function resolveItem(raw: PluginLinkState): Promise<CalItem | null> {
   if (typeof raw.itemId !== 'string') return null
+  if (raw.kind === 'noteDate') {
+    const known = selectedEntry(raw)
+    if (known) return known
+    if (typeof raw.filePath === 'string' && raw.filePath && await api.realm.fileInfo(raw.filePath).catch(() => null)) {
+      return { kind: 'noteDate', id: raw.itemId, title: raw.filePath.split('/').pop()?.replace(/\.md$/i, '') ?? raw.filePath, date: String(raw.date ?? ''), filePath: raw.filePath, readOnly: true }
+    }
+    return null
+  }
   if (raw.kind === 'event' || raw.kind === 'sourced') {
     return resolveCalendarTarget({ id: raw.itemId, sourceId: raw.kind === 'sourced' && typeof raw.sourceId === 'string' ? raw.sourceId : undefined })
   } else if (raw.kind === 'file' && typeof raw.filePath === 'string') {
     const parsed = parseCalendarFile(await api.realm.readFile(raw.filePath), raw.filePath, String(raw.date), String(raw.date))
     const file = parsed.entries.find(entry => entry.id === raw.itemId)
     return file ? { kind: 'file', ...file, filePath: file.path, file, readOnly: false } : null
-  } else if (raw.kind === 'noteDate' && typeof raw.filePath === 'string' && await api.documents.resolve(raw.filePath)) {
-    return { kind: 'noteDate', id: raw.itemId, title: raw.filePath.split('/').pop() ?? raw.filePath, date: String(raw.date ?? ''), filePath: raw.filePath, readOnly: true }
   }
   throw new Error('The bookmarked calendar item is unavailable.')
 }
@@ -227,14 +243,23 @@ function snapshot(surface: SlotId, instanceId?: string): PluginSurfaceSnapshot {
   return {
     title: path?.split('/').pop() || uiText('manifest.name'), view: { ...calendarLinkState({ ...state().time, view: calendarViewMode(surface, state().views.get(surface) ?? state().time.view) }), ...file }, navigation: state().navigation.get(surface),
     ...(path ? { filePath: path } : {}),
-    ...(selected ? { item: { id: calendarItemKey(selected), title: selected.title, state: { ...itemState(selected, surface), ...file } } } : {})
+    ...(selected ? { item: { id: calendarItemKey(selected), title: selected.title, state: { ...itemState(selected, surface), ...file } } } : {}),
+    ...(surface === 'main_workspace' && !path ? { actions: [tableViewAction()] } : {})
   }
+}
+
+/** The page ⋯ menu's Table view (18 Nov): a checked row that switches the Calendar page between its grids and the table. */
+function tableViewAction(): UiMenuItem {
+  const on = api.settings.get()[TABLE_VIEW_KEY] === true
+  return { id: 'calendar.tableView', type: 'checkbox', checked: on, label: uiText('calendar.table.menu'), icon: <TableGlyph />, onSelect: () => { void api.settings.set(TABLE_VIEW_KEY, !on) } }
 }
 
 function subscribe(listener: () => void): () => void {
   const listeners = state().listeners
   listeners.add(listener)
-  return () => { listeners.delete(listener) }
+  // The ⋯ menu's Table view row follows the setting.
+  const offSettings = api.settings.subscribe(listener)
+  return () => { listeners.delete(listener); offSettings() }
 }
 
 function viewProperties(view?: PluginLinkState): PluginProperty[] {
@@ -351,6 +376,27 @@ function GroupProperties(): React.ReactElement {
   </div></api.ui.ScrollPanel></div>
 }
 
+/** "1 h 30 min" between two days and times; empty when the end is not after the start. */
+function durationLabel(startDay: string, start: string, endDay: string, end: string): string {
+  const at = (day: string, time: string): number => parseLocalDate(day).getTime() + (Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))) * 60000
+  const minutes = Math.round((at(endDay, end) - at(startDay, start)) / 60000)
+  if (!(minutes > 0)) return ''
+  const days = Math.floor(minutes / 1440), hours = Math.floor(minutes % 1440 / 60), rest = minutes % 60
+  return [days ? uiText('calendar.card.days', { count: days }) : '', hours ? uiText('calendar.card.hours', { count: hours }) : '', rest ? uiText('calendar.card.minutes', { count: rest }) : ''].filter(Boolean).join(' ')
+}
+
+/** A timed entry (18 Nov): a dot with the start day and time, a line with the duration, a dot with the end day and time. */
+function ItemTimeline({ item, endDay, overdue }: { item: CalItem; endDay: string; overdue: boolean }): React.ReactElement {
+  const start = item.startTime ?? ''
+  const end = item.endTime ?? ''
+  const duration = end ? durationLabel(item.date, start, endDay, end) : ''
+  return <ol className={`calendar-item-timeline${overdue ? ' is-overdue' : ''}`} aria-label={uiText('calendar.card.when')}>
+    <li className="calendar-item-timeline-point"><span className="calendar-item-timeline-dot" aria-hidden="true" /><span className="calendar-item-timeline-day">{dayLabel(item.date)}</span><span className="calendar-item-timeline-time">{start}</span></li>
+    {end && <li className="calendar-item-timeline-span" aria-hidden={!duration}><span className="calendar-item-timeline-line" aria-hidden="true" />{duration && <span className="calendar-item-timeline-duration">{duration}</span>}</li>}
+    {end && <li className="calendar-item-timeline-point"><span className="calendar-item-timeline-dot" aria-hidden="true" /><span className="calendar-item-timeline-day">{dayLabel(endDay)}</span><span className="calendar-item-timeline-time">{end}</span></li>}
+  </ol>
+}
+
 /** "Fri, 20 Nov 2026" in the app's language. */
 function dayLabel(date: string): string {
   return parseLocalDate(date).toLocaleDateString(api.ui.language(), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
@@ -368,8 +414,8 @@ function ItemCard({ item }: { item: CalItem }): React.ReactElement {
   const parent = group?.parent ? groups.find((entry) => entry.id === group.parent) : undefined
   const endDay = item.event?.endDate ?? item.endDate
   const days = endDay && endDay !== item.date ? `${dayLabel(item.date)} – ${dayLabel(endDay)}` : dayLabel(item.date)
-  const time = [item.startTime, item.endTime].filter(Boolean).join(' – ')
-  const when = [days, time || uiText('calendar.card.allDay')].join(' · ')
+  const timed = Boolean(item.startTime)
+  const when = `${days} · ${uiText('calendar.card.allDay')}`
   const today = isoDay(new Date())
   const overdue = item.kind === 'sourced' && !item.completed && (endDay ?? item.date) < today
   const offsets = item.event?.reminderOffsets
@@ -383,7 +429,7 @@ function ItemCard({ item }: { item: CalItem }): React.ReactElement {
   return <div className="calendar-properties-frame" data-plugin-widget-layout="fill"><api.ui.ScrollPanel fill>
     <div className="right-panel-body calendar-item-card" data-calendar-item-id={item.id}>
       <h2 className={`calendar-item-title${item.completed ? ' is-done' : ''}`}>{item.title}</h2>
-      <div className={`calendar-item-line${overdue ? ' is-overdue' : ''}`}><Clock /><span>{when}</span></div>
+      {timed ? <ItemTimeline item={item} endDay={endDay ?? item.date} overdue={overdue} /> : <div className={`calendar-item-line${overdue ? ' is-overdue' : ''}`}><Clock /><span>{when}</span></div>}
       {reminder && <div className="calendar-item-line"><Bell /><span>{reminder}</span></div>}
       {item.note?.trim() && <p className="calendar-item-note">{item.note.trim()}</p>}
       <div className="calendar-item-facts">
@@ -395,7 +441,7 @@ function ItemCard({ item }: { item: CalItem }): React.ReactElement {
           <span className="calendar-item-group-name">{parent && <span className="calendar-item-group-parent">{parent.name} · </span>}{group?.name ?? item.group}</span>
         </span>}
       </div>
-      {item.location?.name && <button type="button" className="calendar-item-line calendar-item-link" title={uiText('calendar.card.openLocation')} onClick={() => openLocation(item.location!)}><MapPin /><span>{item.location.name}</span></button>}
+      {item.location?.name && <ItemLocation location={item.location} onOpen={openLocation} />}
       {!!item.tags?.length && <div className="calendar-item-tags">{item.tags.map((tag) => <span key={tag} className="calendar-item-tag">#{tag}</span>)}</div>}
       {(item.urls ?? []).map((url) => <button key={url} type="button" className="calendar-item-line calendar-item-link" title={url}
         onClick={(event) => { const relPath = parseAppOpenUrl(url); if (relPath) api.workspace.openFile(relPath, undefined, { newTab: api.ui.hasModKey(event) }); else void api.links.open(url) }}>
@@ -410,12 +456,14 @@ const PRIORITY_KEYS: Record<string, string> = { low: 'calendar.priority.low', me
 
 function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkState }): React.ReactElement {
   const [selected, setSelected] = React.useState<CalItem | null>(null)
+  const [resolved, setResolved] = React.useState(false)
   const [error, setError] = React.useState('')
   React.useEffect(() => {
     let disposed = false
+    setResolved(false)
     const refresh = (): void => {
       if (!item) { setSelected(null); setError(''); return }
-      void resolveItem(item).then((value) => { if (!disposed) { setSelected(value); setError('') } }).catch((reason) => { if (!disposed) { setSelected(null); setError(reason instanceof Error ? reason.message : String(reason)) } })
+      void resolveItem(item).then((value) => { if (!disposed) { setSelected(value); setResolved(true); setError('') } }).catch((reason) => { if (!disposed) { setSelected(null); setResolved(true); setError(reason instanceof Error ? reason.message : String(reason)) } })
     }
     refresh()
     const offs = [onChanged(refresh), api.interop.state.subscribe(CALENDAR_ITEM_SOURCE_REVISION_V1, refresh), api.realm.onChanged(info => {
@@ -423,8 +471,8 @@ function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkS
     })]
     return () => { disposed = true; offs.forEach(off => off()) }
   }, [item])
-  if (error) return <div className="right-panel-body" role="alert">{error}</div>
   if (!item) return <Overview view={view} />
+  if (error || resolved && !selected) return <div className="right-panel-body calendar-item-missing"><p>{uiText('calendar.card.missing')}</p></div>
   if (!selected) return <div className="right-panel-body">{uiText('calendar.overview.loading')}</div>
   return <ItemCard item={selected} />
 }
@@ -468,6 +516,8 @@ export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void
     inspect: contextProperties,
     render: () => <Overview sources />
   }))
+  const surfaceState = state()
+  offs.push(registerCalendarDetails(() => surfaceState.time, (listener) => pluginApi.workspace.onTimeControlChanged(() => listener())))
   let refreshing = 0
   const refreshSelected = (): void => {
     const generation = ++refreshing

@@ -34,6 +34,8 @@ import { presetNoteDateSource } from '../src/noteDates'
 import { CalendarAgendaCard, calendarItemMenuItems, eventMenuItems, eventToItem, openItemInCalendarMain, sourcedToItem, type CalItem } from '../src/items'
 import { Settings as CalendarSettings } from '../src/Settings'
 import { ReminderDefaults, ReminderOffsets } from '../src/ReminderOffsets'
+import { calendarDetailValues } from '../src/details'
+import { readMapTile } from '../src/backend/index'
 import CALENDAR_PLUGIN_CONFIG from '../config.json'
 import { rangeDays } from '../src/timeControl'
 import { calendarItemColor, deduplicateCalendarItems } from '../src/useCalendarItems'
@@ -2335,11 +2337,11 @@ describe('note date presets', () => {
 })
 
 describe('Calendar without account integration', () => {
-  it('declares no sync page, remote documents or account/network access', async () => {
+  it('declares no sync page, remote documents or account access, and reaches only the OpenStreetMap tile host', async () => {
     expect(CALENDAR_PLUGIN_CONFIG.settingsSections.some(section => section.id === 'sync')).toBe(false)
     expect(CALENDAR_PLUGIN_CONFIG.noteDocuments.some(source => source.id === 'remote_events')).toBe(false)
     expect(CALENDAR_PLUGIN_CONFIG).not.toHaveProperty('permissions.accounts')
-    expect(CALENDAR_PLUGIN_CONFIG).not.toHaveProperty('permissions.network')
+    expect(CALENDAR_PLUGIN_CONFIG.permissions.network).toEqual({ hosts: ['tile.openstreetmap.org'] })
     const mock = setupCalendarApi()
     await act(async () => render(React.createElement(CalendarSettings)))
     expect(screen.queryByText('Synced calendars')).not.toBeInTheDocument()
@@ -2679,6 +2681,91 @@ describe('Calendar reminders like To-Do', () => {
     expect(onChange).toHaveBeenLastCalledWith([120])
     rerender(React.createElement(ReminderOffsets, { value: [10], onChange, timed: false, time: '', onTimeChange: vi.fn() }))
     expect(screen.getByText('Choose a time for this date-only item.')).toBeInTheDocument()
+  })
+})
+
+describe('Calendar right-sidebar entry card', () => {
+  const card = (mock: MockValleyApi, state: Record<string, unknown>) => {
+    const segment = mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).find((entry) => entry.extension.id === 'calendar.properties')!.extension
+    return render(React.createElement(React.Fragment, null, segment.render({ relPath: '', kind: 'unsupported', subject: { pluginId: 'calendar', surface: 'main_workspace', view: {}, item: { id: 'x', title: 'x', state } } } as never)))
+  }
+
+  it('draws a timed entry as a start and end timeline with its duration and its place on a map', async () => {
+    const mock = setupCalendarApi({ events: [{ id: 'walk', title: 'Survey walk', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-08', startTime: '09:00', endTime: '10:30', location: { name: 'Greenhouse B', lat: 47.36, lng: 8.55 } } as DataRecord] })
+    const { container } = card(mock, { itemId: 'walk', kind: 'event', date: '2026-06-08', sourceId: '', filePath: '' })
+    await waitFor(() => expect(container.querySelector('.calendar-item-card h2')).toHaveTextContent('Survey walk'))
+    const points = [...container.querySelectorAll('.calendar-item-timeline-point')]
+    expect(points.map((point) => point.querySelector('.calendar-item-timeline-time')?.textContent)).toEqual(['09:00', '10:30'])
+    expect(container.querySelector('.calendar-item-timeline-duration')).toHaveTextContent('1 h 30 min')
+    expect(screen.getByRole('button', { name: /Greenhouse B/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Map of Greenhouse B' })).toBeInTheDocument()
+    expect(screen.getByText('© OpenStreetMap contributors')).toBeInTheDocument()
+  })
+
+  it('says an entry that is gone is gone instead of showing an error', async () => {
+    const mock = setupCalendarApi()
+    const { container } = card(mock, { itemId: 'notedate:x:Missing.md:2026-06-08', kind: 'noteDate', date: '2026-06-08', sourceId: '', filePath: 'Missing.md' })
+    await waitFor(() => expect(container).toHaveTextContent('This entry is no longer in the calendar.'))
+    expect(container).not.toHaveTextContent('unavailable')
+  })
+
+  it('counts footer and Info details from the shown entries', () => {
+    setupCalendarApi()
+    const now = new Date(2026, 5, 8, 8, 0)
+    const items = [
+      { kind: 'event', id: 'a', title: 'Standup', date: '2026-06-08', startTime: '09:00', endTime: '09:30' },
+      { kind: 'event', id: 'b', title: 'Review', date: '2026-06-08', startTime: '13:00', endTime: '14:00' },
+      { kind: 'sourced', id: 't', title: 'Late task', date: '2026-06-01', completed: false },
+      { kind: 'noteDate', id: 'n', title: 'Birthday', date: '2026-06-20' }
+    ] as CalItem[]
+    const values = calendarDetailValues(items, 3, { view: 'month', cursor: '2026-06-01', selectedDate: '2026-06-08' } as TimeControlState, now)
+    expect(values.today.value).toBe(2)
+    expect(values.next.text).toBe('Next · Standup · 09:00')
+    expect(values.busyToday.value).toBe('1 h 30 min')
+    expect(values.overdue.value).toBe(1)
+    expect(values.noteDates.value).toBe(1)
+    expect(values.groups.value).toBe(3)
+  })
+
+  it('reads only valid OpenStreetMap tiles through the network broker', async () => {
+    const fetch = vi.fn(async () => ({ status: 200, bodyBase64: 'iVBO' }))
+    await expect(readMapTile({ network: { fetch } } as never, { z: 15, x: 17168, y: 11473 })).resolves.toBe('iVBO')
+    expect(fetch).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://tile.openstreetmap.org/15/17168/11473.png' }))
+    await expect(readMapTile({ network: { fetch } } as never, { z: 2, x: 9, y: 0 })).rejects.toThrow('Not a map tile')
+  })
+})
+
+describe('Calendar table view', () => {
+  it('toggles from the page menu and lists the shown month as sortable rows that select, move and edit', async () => {
+    const mock = setupCalendarApi({ events: [
+      { id: 'b', title: 'Beta review', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-12', startTime: '13:00', endTime: '14:00' } as DataRecord,
+      { id: 'a', title: 'Alpha walk', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-03', location: { name: 'Greenhouse B' } } as DataRecord,
+      { id: 'c', title: 'July trip', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-07-02' } as DataRecord
+    ] })
+    patchTimeControl({ view: 'month', cursor: '2026-06-01', selectedDate: null, rangeStart: null, rangeEnd: null, selectedTime: null })
+    await flushTimeControl()
+    const surface = mock.api.interop.extensions.providers(PLUGIN_SURFACE_V1).find((entry) => entry.extension.surface === 'main_workspace')!.extension
+    const action = surface.getSnapshot().actions!.find((entry) => entry.id === 'calendar.tableView')!
+    expect(action).toMatchObject({ label: 'Table view', type: 'checkbox', checked: false })
+    await act(async () => { action.onSelect!({ newTab: false }) })
+    expect(mock.api.settings.get().tableView).toBe(true)
+    expect(surface.getSnapshot().actions!.find((entry) => entry.id === 'calendar.tableView')).toMatchObject({ checked: true })
+
+    const { container } = render(React.createElement(Calendar))
+    const titles = (): string[] => [...container.querySelectorAll('.calendar-table-row .calendar-table-title')].map((cell) => cell.textContent ?? '')
+    await waitFor(() => expect(titles()).toEqual(['Alpha walk', 'Beta review']))
+    expect([...container.querySelectorAll('.calendar-table th')].map((cell) => cell.textContent)).toEqual(['', 'Title', 'Date↑', 'Time', 'Group', 'Source', 'Place', 'Notes'])
+    expect(container.querySelector('.calendar-table-row .calendar-table-place')).toHaveTextContent('Greenhouse B')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Title' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Title/ })))
+    expect(titles()).toEqual(['Beta review', 'Alpha walk'])
+    const rows = container.querySelectorAll('.calendar-table-row')
+    await act(async () => fireEvent.click(rows[0]))
+    expect(rows[0]).toHaveClass('selected')
+    await act(async () => fireEvent.keyDown(container.querySelector('.calendar-table-scroll')!, { key: 'ArrowDown' }))
+    expect(container.querySelectorAll('.calendar-table-row')[1]).toHaveClass('selected')
+    await act(async () => { await mock.api.settings.set('tableView', false) })
+    await waitFor(() => expect(container.querySelector('.calendar-table')).toBeNull())
   })
 })
 

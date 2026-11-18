@@ -49,6 +49,8 @@ export interface CalendarSettings {
    * no note date on the calendar; saved sources stay untouched.
    */
   noteDatesEnabled: boolean
+  /** The Calendar page shows its period as a table (18 Nov, the page ⋯ menu's Table view). */
+  tableView: boolean
 }
 
 export type CalendarItemClickTarget = 'owner' | 'agenda'
@@ -58,6 +60,7 @@ export const HIDDEN_GROUPS_KEY = 'hiddenGroups'
 export const HIDDEN_SOURCES_KEY = 'hiddenSources'
 export const GROUP_FILTER_KEY = 'groupFilter'
 export const NOTE_DATES_ENABLED_KEY = 'noteDatesEnabled'
+export const TABLE_VIEW_KEY = 'tableView'
 export const GROUPS_SECTION_FOLDED_KEY = 'groupsSectionFolded'
 export const COLLAPSED_GROUPS_KEY = 'collapsedGroups'
 /** The Groups section's "No group" row: items that belong to no group. */
@@ -140,7 +143,8 @@ export function readCalendarSettings(): CalendarSettings {
     groupFilter: readGroupFilter(s[GROUP_FILTER_KEY], hiddenGroups, groups),
     hiddenSources: asStringArray(s.hiddenSources).filter((id) => !id.startsWith('provider-')),
     itemClickTarget: asItemClickTarget(s.itemClickTarget),
-    noteDatesEnabled: s[NOTE_DATES_ENABLED_KEY] !== false
+    noteDatesEnabled: s[NOTE_DATES_ENABLED_KEY] !== false,
+    tableView: s[TABLE_VIEW_KEY] === true
   }
 }
 

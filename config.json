@@ -2851,7 +2851,12 @@
         "assets/icons/calendar-icon"
       ]
     },
-    "largeData": true
+    "largeData": true,
+    "network": {
+      "hosts": [
+        "tile.openstreetmap.org"
+      ]
+    }
   },
   "notifications": [
     {
@@ -2996,6 +3001,17 @@
         },
         "default": true,
         "labelKey": "calendar.filter.noteDates"
+      },
+      {
+        "key": "tableView",
+        "label": "Table view",
+        "type": "custom",
+        "settingsVisible": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "default": false,
+        "labelKey": "calendar.table.menu"
       },
       {
         "key": "groupFilter",

@@ -94,6 +94,15 @@ export const Tags = (p: IconProps): ReactElement => (
   </Svg>
 )
 
+/** Lucide `table` — the Calendar page's table view. */
+export const TableGlyph = (p: IconProps): ReactElement => (
+  <Svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18" /></Svg>
+)
+
+export const Minus = (p: IconProps): ReactElement => (
+  <Svg {...p}><path d="M5 12h14" /></Svg>
+)
+
 export const Plus = (p: IconProps): ReactElement => (
   <Svg {...p}><path d="M12 5v14M5 12h14" /></Svg>
 )

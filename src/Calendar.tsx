@@ -35,6 +35,7 @@ import {
 import { localizedMonth, isoDay, isoWeek, parseLocalDate, startOfWeek } from './dateMath'
 import { useCalendarItems } from './useCalendarItems'
 import { QuickAdd, type QuickAddState } from './QuickAdd'
+import { CalendarTable } from './CalendarTable'
 import { WeekGrid } from './WeekGrid'
 import { MonthGrid, YearGrid } from './MonthGrid'
 import { SWIPE_IDLE_MS, calendarSwipeStep, newSwipeGesture, type CalendarSwipeGesture } from './swipe'
@@ -114,7 +115,8 @@ export function Calendar({
     groups: calendarGroups,
     dayStartHour: calendarDayStartHour,
     dayEndHour: calendarDayEndHour,
-    itemClickTarget
+    itemClickTarget,
+    tableView
   } = useCalendarSettings()
   const weekStart = WEEK_START_INDEX[weekStartPref] ?? 1
   const surface = variant === 'main' ? 'main_workspace' : 'right_sidebar'
@@ -542,6 +544,13 @@ export function Calendar({
       <h2>{localizedMonth(month, api.ui.language())} <span>{year}</span></h2>
     )
 
+  // The table lists the entries of the shown week, month or year (18 Nov).
+  const showTable = tableView && variant === 'main' && !filePath
+  const tableFirst = view === 'year' ? `${year}-01-01` : view === 'week' ? isoDay(weekOf) : `${year}-${String(month + 1).padStart(2, '0')}-01`
+  const tableLast = view === 'year' ? `${year}-12-31` : view === 'week' ? isoDay(weekDays[6]) : `${year}-${String(month + 1).padStart(2, '0')}-31`
+  const tableItems = React.useMemo(() => showTable ? items.filter((item) => item.date >= tableFirst && item.date <= tableLast) : [],
+    [items, showTable, tableFirst, tableLast])
+
   // The selected-day cards obey the shared source/group filters because `items`
   // is already the one filtered item layer used by every Calendar surface.
   const dayList = tc.selectedDate
@@ -630,7 +639,10 @@ export function Calendar({
         const column = (event.target as Element).closest('.calendar-weekgrid-col')
         anchor.current = { x: column ? column.getBoundingClientRect().right + 8 : event.clientX, y: event.clientY }
       }}>
-        <div className="calendar-scroll-area" data-view={view}>
+        <div className="calendar-scroll-area" data-view={showTable ? 'table' : view}>
+      {showTable ? <CalendarTable items={tableItems} groups={calendarGroups} colorFor={colorFor} selectedKey={selectedItemKey}
+        onSelect={(item) => { setSelectedItemKey(calendarItemKey(item)); selectCalendarProperties(item, surface) }}
+        onEdit={editItem} onContextMenu={(item, event) => void handleItemAction(item, event)} /> :
       <div className="calendar-stage" onWheel={onStageWheel} onMouseMove={handleStageMouseMove} onMouseLeave={() => { lastSwapRef.current = 0 }}>
         <div className="calendar-grid-wrap" key={periodKey} data-dir={dir}>
           {view === 'month' && (
@@ -684,7 +696,7 @@ export function Calendar({
           )}
           {view === 'year' && <YearGrid year={year} today={today} weekStart={weekStart} revealTarget={revealTarget} onPickMonth={(m) => patch({ view: 'month', cursor: `${year}-${String(m + 1).padStart(2, '0')}-01` })} />}
         </div>
-      </div>
+      </div>}
       {compactLayout && view === 'month' && tc.selectedDate && (
         <div className="calendar-todos">
           {dayList.length === 0 ? (

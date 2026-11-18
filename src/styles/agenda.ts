@@ -183,4 +183,36 @@ button.agenda-card-location:hover { color: var(--accent-color); }
 .agenda-card-note img { max-width: 100%; }
 .calendar-chip-glyph { display: inline-flex; width: 1em; height: 1em; flex-shrink: 0; }
 .calendar-chip-glyph svg { width: 100%; height: 100%; }
+/* The Calendar page as a table (18 Nov, like To-Do's main table): sticky 37px + 1px header, 37px rows. */
+.calendar-scroll-area[data-view='table'] { overflow:hidden; container-type:inline-size; }
+.calendar-table-scroll { flex:1 1 auto; min-height:0; overflow:auto; outline:none; }
+.calendar-table { width:100%; border-collapse:separate; border-spacing:0; table-layout:fixed; font-size:var(--small-font-size); }
+.calendar-table th { position:sticky; top:0; z-index:2; box-sizing:border-box; height:38px; padding:0 10px; border-bottom:1px solid var(--border-light);
+  background:var(--pane-bg, var(--body-color)); color:var(--text-secondary); font-weight:var(--font-semi-bold); text-align:left; white-space:nowrap; }
+.calendar-table td { box-sizing:border-box; height:37px; padding:0 10px; border-bottom:1px solid var(--border-light); color:var(--text-secondary); vertical-align:middle; overflow:hidden; }
+.calendar-table-row { cursor:default; }
+.calendar-table-row:hover td { background:var(--hover-bg); }
+.calendar-table-row.selected td { background:var(--accent-tint-bg); }
+.calendar-table-row.completed .calendar-table-title { color:var(--text-tertiary); text-decoration:line-through; }
+.calendar-table-text { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.calendar-table .calendar-table-mark { width:38px; padding:0 0 0 12px; }
+.calendar-table .calendar-table-title { width:auto; color:var(--title-color); }
+.calendar-table .calendar-table-date { width:150px; }
+.calendar-table .calendar-table-time { width:112px; font-variant-numeric:tabular-nums; }
+.calendar-table .calendar-table-group { width:132px; }
+.calendar-table .calendar-table-source { width:110px; }
+.calendar-table .calendar-table-place { width:130px; }
+.calendar-table .calendar-table-note { width:22%; }
+.calendar-table td.calendar-table-note { color:var(--text-tertiary); }
+.calendar-table-dot { display:block; width:9px; height:9px; margin-left:4px; border-radius:50%; }
+.calendar-table-sort { display:inline-flex; align-items:center; gap:4px; max-width:100%; padding:2px 4px; margin-left:-4px; border:none; border-radius:var(--radius-sm);
+  background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.calendar-table-sort:hover { background:var(--hover-bg); color:var(--text-color); }
+.calendar-table-sort.active { color:var(--title-color); }
+.calendar-table-sort > span:first-child { overflow:hidden; text-overflow:ellipsis; }
+.calendar-table-sort-mark { color:var(--text-tertiary); }
+.calendar-table-empty { display:grid; flex:1 1 auto; place-items:center; min-height:120px; padding:var(--space-4); color:var(--text-tertiary); font-size:var(--small-font-size); }
+/* Narrow panes keep Title, Date and Time. */
+@container (max-width: 640px) { .calendar-table .calendar-table-source, .calendar-table .calendar-table-place, .calendar-table .calendar-table-note { display:none; } }
+@container (max-width: 460px) { .calendar-table .calendar-table-group { display:none; } }
 `

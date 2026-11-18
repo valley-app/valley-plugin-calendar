@@ -205,4 +205,34 @@ export const noteDateStyles = `/* ── Note-date sources (Settings → Calenda
 .calendar-item-line.is-overdue { color:var(--negative-color); }
 .calendar-item-link { align-self:flex-start; max-width:100%; padding:0; border:none; background:transparent; color:var(--accent-color); font:inherit; font-size:var(--small-font-size); text-align:left; cursor:pointer; }
 .calendar-item-link:hover span { text-decoration:underline; }
+/* A timed entry: dot, start day and time; a line with the duration; dot, end day and time. */
+.calendar-item-timeline { display:flex; flex-direction:column; margin:2px 0; padding:0; list-style:none; color:var(--text-color); font-size:var(--small-font-size); }
+.calendar-item-timeline-point { display:grid; grid-template-columns:14px 1fr auto; align-items:center; gap:8px; min-height:20px; }
+.calendar-item-timeline-dot { justify-self:center; width:9px; height:9px; border-radius:50%; background:var(--accent-color); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent-color) 20%, transparent); }
+.calendar-item-timeline-day { min-width:0; color:var(--text-secondary); overflow-wrap:anywhere; }
+.calendar-item-timeline-time { font-weight:var(--font-semi-bold, 600); font-variant-numeric:tabular-nums; }
+.calendar-item-timeline-span { display:grid; grid-template-columns:14px 1fr; align-items:center; gap:8px; min-height:22px; }
+.calendar-item-timeline-line { justify-self:center; align-self:stretch; width:2px; border-radius:1px; background:color-mix(in srgb, var(--accent-color) 45%, transparent); }
+.calendar-item-timeline-duration { color:var(--text-tertiary); font-size:var(--smaller-font-size); font-variant-numeric:tabular-nums; }
+.calendar-item-timeline.is-overdue .calendar-item-timeline-dot { background:var(--negative-color); box-shadow:0 0 0 3px color-mix(in srgb, var(--negative-color) 20%, transparent); }
+.calendar-item-timeline.is-overdue .calendar-item-timeline-line { background:color-mix(in srgb, var(--negative-color) 45%, transparent); }
+.calendar-item-timeline.is-overdue .calendar-item-timeline-time { color:var(--negative-color); }
+.calendar-item-missing p { margin:0; color:var(--text-secondary); font-size:var(--small-font-size); }
+/* The place on an OpenStreetMap map, as in To-Do. */
+.calendar-item-map { position:relative; display:block; width:100%; height:180px; padding:0; overflow:hidden; border:1px solid var(--border-light); border-radius:6px;
+  background:var(--hover-bg); cursor:grab; touch-action:none; user-select:none; }
+.calendar-item-map.is-dragging { cursor:grabbing; }
+.calendar-item-map-tile { position:absolute; width:256px; height:256px; max-width:none; pointer-events:none; user-select:none; }
+.calendar-item-map.is-dark .calendar-item-map-tile { filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.6); }
+.calendar-item-map-pin { position:absolute; display:block; width:26px; height:26px; transform:translate(-50%, -100%); color:var(--accent-color); filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+.calendar-item-map-pin svg { display:block; width:26px; height:26px; fill:currentColor; stroke:#fff; stroke-width:1.5; }
+.calendar-item-map-pin svg circle { fill:#fff; stroke:none; }
+.calendar-item-map-zoom { position:absolute; top:6px; right:6px; display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--border-light); border-radius:6px; background:var(--pane-bg); }
+.calendar-item-map-zoom-btn { display:grid; place-items:center; width:26px; height:26px; padding:0; border:none; background:transparent; color:var(--text-color); cursor:pointer; }
+.calendar-item-map-zoom-btn + .calendar-item-map-zoom-btn { border-top:1px solid var(--border-light); }
+.calendar-item-map-zoom-btn:hover:not(:disabled) { background:var(--hover-bg); }
+.calendar-item-map-zoom-btn:disabled { opacity:.4; cursor:default; }
+.calendar-item-map-zoom-btn svg { width:14px; height:14px; }
+.calendar-item-map-credit { position:absolute; right:0; bottom:0; padding:1px 5px; border-top-left-radius:4px; background:color-mix(in srgb, var(--pane-bg, #fff) 78%, transparent);
+  color:var(--text-secondary); font-size:calc(var(--smaller-font-size) * .85); line-height:1.4; }
 `

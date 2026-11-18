@@ -18,6 +18,7 @@ import { itemSourceId, visibleItems, type ItemSourceOption } from './filters'
 import { EVENTS_SOURCE_ID, NO_GROUP_ID, NOTE_DATES_SOURCE_ID } from './settingsStore'
 import { resolveItemColor } from './colors'
 import { uiText } from './localization'
+import { publishCalendarItems } from './details'
 
 export interface CalendarItems {
   /** Items contributed by other plugins through `calendar.itemSource`. */
@@ -169,6 +170,8 @@ export function useCalendarItems(opts: { focusYear?: number; filePath?: string }
     }
     return counts
   }, [baseItems, calendarGroups])
+
+  React.useEffect(() => { if (!opts.filePath) publishCalendarItems(items, calendarGroups.length) }, [items, calendarGroups.length, opts.filePath])
 
   const groupSourceCounts = React.useMemo(() => {
     const counts: Record<string, Record<string, number>> = {}
