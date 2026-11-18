@@ -14,7 +14,7 @@ import {
 } from './noteDates'
 import { eventToItem, noteDateToItem, sourcedToItem, type CalItem } from './items'
 import { useCalendarSourceProviders, type SourcedItem, type CalendarSourceError } from './itemSources'
-import { visibleItems, type ItemSourceOption } from './filters'
+import { itemSourceId, visibleItems, type ItemSourceOption } from './filters'
 import { EVENTS_SOURCE_ID, NO_GROUP_ID, NOTE_DATES_SOURCE_ID } from './settingsStore'
 import { resolveItemColor } from './colors'
 import { uiText } from './localization'
@@ -34,6 +34,8 @@ export interface CalendarItems {
   sourceOptions: ItemSourceOption[]
   /** Record totals for the group filter, keyed by group id; `NO_GROUP_ID` counts the items without a group. */
   groupCounts: Readonly<Record<string, number>>
+  /** The same totals split by source (`itemSourceId`), keyed by group id, then source id. */
+  groupSourceCounts: Readonly<Record<string, Readonly<Record<string, number>>>>
   colorFor: (item: CalItem) => string
 }
 
@@ -168,6 +170,18 @@ export function useCalendarItems(opts: { focusYear?: number; filePath?: string }
     return counts
   }, [baseItems, calendarGroups])
 
+  const groupSourceCounts = React.useMemo(() => {
+    const counts: Record<string, Record<string, number>> = {}
+    for (const item of baseItems) {
+      const group = groupOfItem(item, calendarGroups)
+      const key = group ? group.id : NO_GROUP_ID
+      const source = itemSourceId(item)
+      const row = counts[key] ?? (counts[key] = {})
+      row[source] = (row[source] ?? 0) + 1
+    }
+    return counts
+  }, [baseItems, calendarGroups])
+
   const colorFor = React.useCallback(
     (item: CalItem): string => calendarItemColor(item, calendarGroups),
     [calendarGroups]
@@ -186,5 +200,5 @@ export function useCalendarItems(opts: { focusYear?: number; filePath?: string }
     return map
   }, [items])
 
-  return { documentErrors: documents.errors, sourced, events, sourceErrors, items, itemsByDay, noteDates, sourceOptions, groupCounts, colorFor }
+  return { documentErrors: documents.errors, sourced, events, sourceErrors, items, itemsByDay, noteDates, sourceOptions, groupCounts, groupSourceCounts, colorFor }
 }

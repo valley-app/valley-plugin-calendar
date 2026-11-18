@@ -435,5 +435,10 @@
   "calendar.noteDatesFeature.section": "笔记",
   "calendar.noteDatesFeature.description": "将笔记属性中的日期（如生日或截止日期）显示在日历上。关闭后隐藏“笔记日期”页面和所有笔记日期；来源会保留。",
   "calendar.noteDatesFeature.toggle": "显示笔记日期",
-  "calendar.noteDatesFeature.configure": "配置笔记日期"
+  "calendar.noteDatesFeature.configure": "配置笔记日期",
+  "calendar.card.allDay": "全天",
+  "calendar.card.reminder": "提前 {{time}} 提醒",
+  "calendar.card.done": "已完成",
+  "calendar.card.open": "未完成",
+  "calendar.card.openLocation": "打开地点"
 }

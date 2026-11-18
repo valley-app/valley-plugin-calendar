@@ -614,7 +614,7 @@ describe('Calendar shell chrome', () => {
     })
     const segments = mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).map((entry) => entry.extension)
     expect(segments.map(({ id, icon }) => ({ id, icon }))).toEqual([
-      { id: 'calendar.properties', icon: 'calendar' }, { id: 'calendar.groups', icon: 'group' }, { id: 'calendar.sources', icon: 'layers' }, { id: 'calendar.noteDates', icon: 'push-pin' }
+      { id: 'calendar.properties', icon: 'calendar' }, { id: 'calendar.groups', icon: 'group' }, { id: 'calendar.sources', icon: 'layers' }
     ])
     const sources = segments.find((entry) => entry.id === 'calendar.sources')!
     expect(Object.fromEntries((await sources.inspect!(context)).map((field) => [field.id, field.value]))).toMatchObject({
@@ -647,51 +647,25 @@ describe('Calendar shell chrome', () => {
     expect(screen.getByRole('switch', { name: 'To-Do' })).toBeChecked()
   })
 
-  it('uses shared groups and the Groups section filter in a separate Groups tab', async () => {
-    const mock = setupCalendarApi({ groups: [{ id: 'field', name: 'Field work', color: paletteRef('green') }] })
-    const segment = mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).find((entry) => entry.extension.id === 'calendar.groups')!.extension
-    const { container } = render(React.createElement(React.Fragment, null, segment.render({ relPath: '', kind: 'unsupported' })))
-    expect(container.querySelector('.calendar-groups.embedded')).toBeInTheDocument()
-    const row = screen.getByRole('button', { name: /^Field work/ })
-    expect(screen.getByRole('button', { name: /^All entries/ })).toHaveAttribute('aria-pressed', 'true')
-    await act(async () => fireEvent.click(row))
-    expect(mock.api.settings.get().groupFilter).toEqual(['field'])
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Field work/ })).toHaveAttribute('aria-pressed', 'true'))
-    expect(await segment.inspect!({ relPath: '', kind: 'unsupported' })).toEqual([expect.objectContaining({ id: 'field', value: true })])
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^All entries/ })))
-    expect(mock.api.settings.get().groupFilter).toEqual([])
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Field work/ })).toHaveAttribute('aria-pressed', 'false'))
-    fireEvent.click(screen.getByRole('button', { name: 'Manage groups' }))
-    expect(mock.api.workspace.openOwnSettings).toHaveBeenCalledWith()
-    expect(mock.api.workspace.setGroups).not.toHaveBeenCalled()
-  })
-
-  it('shows persisted note-date source state in a separate Pin tab', async () => {
+  it('lists every group with its total in a To-Do style Groups tab that opens to counts by source', async () => {
     const mock = setupCalendarApi({
-      indexEntries: [
-        { relPath: 'Contacts/Fern.md', title: 'Fern', kind: 'note', frontmatter: { type: 'contact', birthdate: '1990-05-04' }, mtimeMs: 0 },
-        { relPath: 'Projects/Canopy.md', title: 'Canopy', kind: 'note', frontmatter: { type: 'project', due: '2026-06-08' }, mtimeMs: 0 }
-      ],
-      noteDateSources: [
-        { id: 'birthdays', title: 'Birthdays', matchKey: 'type', matchValue: 'contact', dateField: 'birthdate', match: 'day-month', showCount: true, labelMode: 'filename', showFields: [], color: 'palette:blue', icon: 'cake', visible: true, hidden: false },
-        { id: 'deadlines', title: 'Deadlines', matchKey: 'type', matchValue: 'project', dateField: 'due', match: 'exact', showCount: false, labelMode: 'filename', showFields: [], color: 'palette:orange', icon: 'flag', visible: false, hidden: false }
+      groups: [{ id: 'field', name: 'Field work', color: paletteRef('green') }, { id: 'plots', name: 'Plots', color: paletteRef('blue'), parent: 'field' }],
+      events: [
+        { id: 'e1', title: 'Survey', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-08', groupId: 'field' } as DataRecord,
+        { id: 'e2', title: 'Plot check', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-09', groupId: 'plots' } as DataRecord,
+        { id: 'e3', title: 'Loose', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-10' } as DataRecord
       ]
     })
-    const segment = mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).find((entry) => entry.extension.id === 'calendar.noteDates')!.extension
-    expect(await segment.inspect!({ relPath: '', kind: 'unsupported' })).toEqual([
-      expect.objectContaining({ id: 'birthdays', label: 'Birthdays', value: true, type: 'boolean' }),
-      expect.objectContaining({ id: 'deadlines', label: 'Deadlines', value: false, type: 'boolean' })
-    ])
-
+    const segments = mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).map((entry) => entry.extension)
+    expect(segments.map((entry) => entry.id)).not.toContain('calendar.noteDates')
+    const segment = segments.find((entry) => entry.id === 'calendar.groups')!
     const { container } = render(React.createElement(React.Fragment, null, segment.render({ relPath: '', kind: 'unsupported' })))
-    const birthdays = await screen.findByRole('button', { name: 'Hide “Birthdays” in the calendar' })
-    expect(birthdays).toHaveAttribute('aria-pressed', 'true')
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Show “Deadlines” in the calendar' })).toHaveAttribute('aria-pressed', 'false'))
-    expect([...container.querySelectorAll('.notedate-tree-source .notedate-row-count')].map((node) => node.textContent)).toEqual(['1', '1'])
-
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Show “Deadlines” in the calendar' })))
-    await waitFor(() => expect(mock.datasets.get('calendar.note_date_sources')?.find((row) => row.id === 'deadlines')?.definition).toMatchObject({ visible: true }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Hide “Deadlines” in the calendar' })).toHaveAttribute('aria-pressed', 'true'))
+    const headers = (): string[] => [...container.querySelectorAll('.calendar-status-group-header')].map((node) => node.textContent ?? '')
+    await waitFor(() => expect(headers()).toEqual(['Field work2', 'Plots1', 'No group1']))
+    expect(container.querySelector('.calendar-status-subgroup')).toHaveTextContent('Plots')
+    expect(container.querySelector('.calendar-filter-property-row, [role="switch"]')).toBeNull()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Field work/ })))
+    expect([...container.querySelectorAll('.calendar-group-status-row')].map((node) => node.textContent)).toContain('Events2')
   })
 
   it('shows an icon beside every day-menu action', async () => {
@@ -1225,7 +1199,8 @@ describe('Calendar item clicks', () => {
 
     const properties = renderProperties(mock)
     await waitFor(() => expect(properties.container).toHaveTextContent('Open field survey'))
-    expect(properties.container.querySelector('input, textarea, select, button')).not.toBeInTheDocument()
+    expect(properties.container.querySelector('input, textarea, select')).not.toBeInTheDocument()
+    expect(properties.container.querySelector('.calendar-item-card h2')).toHaveTextContent('Open field survey')
     const segment = mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1)[0].extension
     expect(segment.editCommand).toBeUndefined()
     properties.unmount()
@@ -1714,10 +1689,6 @@ describe('AgendaPanel item clicks', () => {
     expect(container.querySelector('.agenda-filter-panel-noteDates')).toBeNull()
     expect(container.querySelector('.agenda-main')).not.toHaveAttribute('hidden')
     expect([...container.querySelectorAll('.agenda-filter-bar > button')].map((entry) => entry.getAttribute('aria-label'))).toEqual(['Sources'])
-    const segments = (): string[] => mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).map((entry) => entry.extension.id)
-    expect(segments()).not.toContain('calendar.noteDates')
-    await act(async () => { await mock.api.settings.set('noteDatesEnabled', true) })
-    expect(segments()).toContain('calendar.noteDates')
   })
 
   it('filters by the Groups section under the search field like Contacts', async () => {

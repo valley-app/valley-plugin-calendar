@@ -435,5 +435,10 @@
   "calendar.noteDatesFeature.section": "Notas",
   "calendar.noteDatesFeature.description": "Pone en el calendario fechas de las propiedades de las notas, como cumpleaños o plazos. Desactivado oculta la página Fechas de notas y todas las fechas de notas; las fuentes se conservan.",
   "calendar.noteDatesFeature.toggle": "Mostrar fechas de notas",
-  "calendar.noteDatesFeature.configure": "Configurar Fechas de notas"
+  "calendar.noteDatesFeature.configure": "Configurar Fechas de notas",
+  "calendar.card.allDay": "Todo el día",
+  "calendar.card.reminder": "Recordatorio {{time}} antes",
+  "calendar.card.done": "Hecho",
+  "calendar.card.open": "Pendiente",
+  "calendar.card.openLocation": "Abrir el lugar"
 }

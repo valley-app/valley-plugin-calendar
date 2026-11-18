@@ -435,5 +435,10 @@
   "calendar.noteDatesFeature.section": "Notes",
   "calendar.noteDatesFeature.description": "Puts dates from note properties on the calendar, such as birthdays or deadlines. Off hides the Note dates page and every note date; the sources are kept.",
   "calendar.noteDatesFeature.toggle": "Show note dates",
-  "calendar.noteDatesFeature.configure": "Configure Note dates"
+  "calendar.noteDatesFeature.configure": "Configure Note dates",
+  "calendar.card.allDay": "All day",
+  "calendar.card.reminder": "Reminder {{time}} before",
+  "calendar.card.done": "Done",
+  "calendar.card.open": "Open",
+  "calendar.card.openLocation": "Open the place"
 }

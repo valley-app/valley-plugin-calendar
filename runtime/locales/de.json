@@ -435,5 +435,10 @@
   "calendar.noteDatesFeature.section": "Notizen",
   "calendar.noteDatesFeature.description": "Setzt Daten aus Notiz-Eigenschaften in den Kalender, etwa Geburtstage oder Fristen. Aus blendet die Seite Notizdaten und alle Notizdaten aus; die Quellen bleiben erhalten.",
   "calendar.noteDatesFeature.toggle": "Notizdaten anzeigen",
-  "calendar.noteDatesFeature.configure": "Notizdaten konfigurieren"
+  "calendar.noteDatesFeature.configure": "Notizdaten konfigurieren",
+  "calendar.card.allDay": "Ganztägig",
+  "calendar.card.reminder": "Erinnerung {{time}} vorher",
+  "calendar.card.done": "Erledigt",
+  "calendar.card.open": "Offen",
+  "calendar.card.openLocation": "Ort öffnen"
 }

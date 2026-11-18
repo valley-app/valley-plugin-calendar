@@ -168,4 +168,41 @@ export const noteDateStyles = `/* ── Note-date sources (Settings → Calenda
 .notedate-tree-row.drop-before::before { top:0; transform:translateY(-50%); }
 .notedate-tree-row.drop-after::before { bottom:0; transform:translateY(50%); }
 .notedate-sidebar-sources.embedded .notedate-sidebar-bar { position:static; }
+/* Right sidebar (18 Nov, as in To-Do): the Groups tab and the selected entry fill the panel and scroll in its ScrollPanel. */
+.calendar-properties-frame { display:flex; flex-direction:column; flex:1; height:100%; min-height:0; min-width:0; }
+.calendar-status-groups { border-bottom:1px solid var(--border-light); }
+.calendar-status-subgroup .calendar-status-group-header { padding-left:calc(var(--space-3) + 14px); }
+.calendar-status-group + .calendar-status-group { border-top:1px solid var(--border-light); }
+.calendar-status-group-header { display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); width:100%; min-height:32px;
+  padding:4px var(--space-3); border:none; background:transparent; color:var(--text-secondary); font:inherit; font-size:var(--smaller-font-size); text-align:left; cursor:pointer; }
+.calendar-status-group-header:hover { background:var(--hover-bg); color:var(--text-color); }
+.calendar-status-group-name, .calendar-status-group-meta { display:flex; align-items:center; }
+.calendar-status-group-name { min-width:0; }
+.calendar-status-group-meta { gap:var(--space-1); flex:0 0 auto; color:var(--text-color); font-variant-numeric:tabular-nums; }
+.calendar-status-group-meta svg { width:13px; height:13px; color:var(--text-tertiary); transform:rotate(-90deg); transition:transform .12s ease; }
+.calendar-status-group.expanded .calendar-status-group-meta svg { transform:none; }
+.calendar-group-status-breakdown { display:flex; flex-direction:column; gap:3px; padding:1px var(--space-3) 8px; }
+.calendar-group-status-row { display:flex; align-items:baseline; justify-content:space-between; gap:var(--space-2); min-width:0; color:var(--text-tertiary); font-size:var(--smaller-font-size); }
+.calendar-group-status-row > span:first-child { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.calendar-group-status-row > span:last-child { color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+.calendar-item-card { display:flex; flex-direction:column; gap:var(--space-2); padding:var(--space-3); user-select:text; }
+.calendar-item-title { margin:0; color:var(--title-color, var(--text-color)); font-size:1.25rem; font-weight:var(--font-bold, 700); line-height:1.25; overflow-wrap:anywhere; }
+.calendar-item-title.is-done { color:var(--text-secondary); text-decoration:line-through; }
+.calendar-item-facts { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; min-width:0; font-size:var(--smaller-font-size); }
+.calendar-item-fact { display:inline-flex; align-items:center; gap:4px; color:var(--text-secondary); white-space:nowrap; }
+.calendar-item-fact svg { width:14px; height:14px; }
+.calendar-item-group-pill { display:inline-flex; align-items:center; gap:5px; max-width:100%; height:20px; padding:0 8px 0 7px; overflow:hidden; border-radius:999px;
+  background:color-mix(in srgb, var(--calendar-group-color) 16%, transparent); color:var(--calendar-group-color); font-size:var(--smaller-font-size); font-weight:var(--font-medium); white-space:nowrap; }
+.calendar-item-group-dot { width:7px; height:7px; flex:0 0 auto; border-radius:50%; background:currentColor; }
+.calendar-item-group-name { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.calendar-item-group-parent { opacity:.7; }
+.calendar-item-tags { display:flex; flex-wrap:wrap; gap:4px 8px; }
+.calendar-item-tag { color:var(--accent-color); font-size:var(--smaller-font-size); }
+.calendar-item-note { margin:0; color:var(--text-color); font-size:var(--small-font-size); line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere; }
+.calendar-item-line { display:flex; align-items:flex-start; gap:6px; color:var(--text-secondary); font-size:var(--small-font-size); line-height:18px; }
+.calendar-item-line svg { flex:0 0 auto; width:14px; height:14px; margin-top:2px; }
+.calendar-item-line span { min-width:0; overflow-wrap:anywhere; }
+.calendar-item-line.is-overdue { color:var(--negative-color); }
+.calendar-item-link { align-self:flex-start; max-width:100%; padding:0; border:none; background:transparent; color:var(--accent-color); font:inherit; font-size:var(--small-font-size); text-align:left; cursor:pointer; }
+.calendar-item-link:hover span { text-decoration:underline; }
 `

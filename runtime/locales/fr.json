@@ -435,5 +435,10 @@
   "calendar.noteDatesFeature.section": "Notes",
   "calendar.noteDatesFeature.description": "Place sur le calendrier des dates tirées des propriétés des notes, comme les anniversaires ou les échéances. Désactivé masque la page Dates des notes et toutes les dates des notes ; les sources sont conservées.",
   "calendar.noteDatesFeature.toggle": "Afficher les dates des notes",
-  "calendar.noteDatesFeature.configure": "Configurer Dates des notes"
+  "calendar.noteDatesFeature.configure": "Configurer Dates des notes",
+  "calendar.card.allDay": "Toute la journée",
+  "calendar.card.reminder": "Rappel {{time}} avant",
+  "calendar.card.done": "Terminé",
+  "calendar.card.open": "À faire",
+  "calendar.card.openLocation": "Ouvrir le lieu"
 }

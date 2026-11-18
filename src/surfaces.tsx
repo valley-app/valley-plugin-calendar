@@ -7,13 +7,17 @@ import { calendarItemKey, type CalItem } from './items'
 import { calendarLinkPatch, calendarLinkState, calendarViewMode, defaultTimeControl, saveCalendarViewMode } from './timeControl'
 import { onChanged } from './events'
 import { groupOfItem } from './localGroups'
-import { EVENTS_SOURCE_ID, HIDDEN_SOURCES_KEY, NOTE_DATES_ENABLED_KEY, NOTE_DATES_SOURCE_ID, readCalendarSettings, useCalendarSettings } from './settingsStore'
+import { EVENTS_SOURCE_ID, HIDDEN_SOURCES_KEY, NO_GROUP_ID, NOTE_DATES_SOURCE_ID, readCalendarSettings, useCalendarSettings } from './settingsStore'
 import { uiText } from './localization'
 import { resolveCalendarTarget } from './commands'
 import { useCalendarItems } from './useCalendarItems'
 import { sourceDescriptors, useCalendarSourceProviders } from './itemSources'
-import { CalendarFilterList, GroupsSection, NoteDateSourceFilterList } from './filters'
-import { loadNoteDateSources } from './noteDateStore'
+import { CalendarFilterList } from './filters'
+import { paletteCssValue } from '@valley/plugin-sdk/palette'
+import { parseAppOpenUrl } from '@valley/plugin-sdk/paths'
+import { AttachmentCard, openLocation } from './fields'
+import { formatReminderTime } from './ReminderOffsets'
+import { Bell, ChevronDown, Clock, Flag, Link, MapPin } from './icons'
 import { addDays, isoDay, isoWeek, localizedMonth, parseLocalDate, startOfWeek } from './dateMath'
 import { WEEK_START_INDEX } from './lib'
 import { subscribeHostField } from './hooks'
@@ -308,17 +312,103 @@ function Overview({ view, sources = false }: { view?: PluginLinkState; sources?:
   </div>
 }
 
-function GroupProperties(): React.ReactElement {
-  const settings = useCalendarSettings()
-  const { groupCounts } = useCalendarItems()
-  return <div className="right-panel-body props-info">
-    <div className="props-info-actions"><button type="button" onClick={() => api.workspace.openOwnSettings()}>{uiText('calendar.properties.manageGroups')}</button></div>
-    {settings.groups.length ? <GroupsSection embedded groups={settings.groups} counts={groupCounts} /> : <p className="props-info-hint">{uiText('calendar.overview.none')}</p>}
-  </div>
+/** One group of the Groups tab, as in To-Do: dot, name, total and chevron, opening to its counts by source. */
+function GroupBreakdown({ label, color, total, rows, sub }: { label: string; color: string; total: number; rows: { id: string; label: string; count: number }[]; sub?: boolean }): React.ReactElement {
+  const [expanded, setExpanded] = React.useState(false)
+  return <section className={`calendar-status-group${sub ? ' calendar-status-subgroup' : ''}${expanded ? ' expanded' : ''}`}>
+    <button className="calendar-status-group-header" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+      <span className="calendar-status-group-name"><span className="props-info-dot" style={{ background: color }} />{label}</span>
+      <span className="calendar-status-group-meta"><span>{total}</span><ChevronDown /></span>
+    </button>
+    {expanded && <div className="calendar-group-status-breakdown">
+      {rows.map((row) => <div className="calendar-group-status-row" key={row.id}><span>{row.label}</span><span>{row.count}</span></div>)}
+    </div>}
+  </section>
 }
 
-function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkState }): React.ReactElement {
+/** The Groups tab of the right sidebar (18 Nov, as in To-Do): every group with its total, opening to its counts by source; a subgroup sits one step in. */
+function GroupProperties(): React.ReactElement {
   const { groups } = useCalendarSettings()
+  const { groupSourceCounts, sourceOptions } = useCalendarItems()
+  const countsOf = (ids: string[]): { total: number; rows: { id: string; label: string; count: number }[] } => {
+    const rows = sourceOptions.map((source) => ({ id: source.id, label: source.label, count: ids.reduce((sum, id) => sum + (groupSourceCounts[id]?.[source.id] ?? 0), 0) }))
+    return { total: rows.reduce((sum, row) => sum + row.count, 0), rows }
+  }
+  const mains = groups.filter((group) => group.parent === undefined)
+  const entries = mains.flatMap((group) => {
+    const subs = groups.filter((candidate) => candidate.parent === group.id)
+    return [
+      { id: group.id, label: group.name, color: paletteCssValue(group.color), sub: false, ...countsOf([group.id, ...subs.map((entry) => entry.id)]) },
+      ...subs.map((entry) => ({ id: entry.id, label: entry.name, color: paletteCssValue(entry.color), sub: true, ...countsOf([entry.id]) }))
+    ]
+  })
+  const ungrouped = countsOf([NO_GROUP_ID])
+  if (ungrouped.total > 0) entries.push({ id: NO_GROUP_ID, label: uiText('calendar.groups.none'), color: 'var(--text-tertiary)', sub: false, ...ungrouped })
+  return <div className="calendar-properties-frame" data-plugin-widget-layout="fill"><api.ui.ScrollPanel fill><div className="right-panel-body props-info calendar-groups-properties">
+    {entries.length ? <div className="calendar-status-groups">
+      {entries.map((entry) => <GroupBreakdown key={entry.id} label={entry.label} color={entry.color} total={entry.total} rows={entry.rows} sub={entry.sub} />)}
+    </div> : <p className="props-info-hint">{uiText('calendar.overview.none')}</p>}
+  </div></api.ui.ScrollPanel></div>
+}
+
+/** "Fri, 20 Nov 2026" in the app's language. */
+function dayLabel(date: string): string {
+  return parseLocalDate(date).toLocaleDateString(api.ui.language(), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/**
+ * The selected entry, read-only, as To-Do's Task tab (18 Nov): title, when it
+ * happens, its reminder and note, then source, priority, state and group, the
+ * place, tags, links and, last, its files.
+ */
+function ItemCard({ item }: { item: CalItem }): React.ReactElement {
+  const { groups } = useCalendarSettings()
+  const providers = useCalendarSourceProviders()
+  const group = groupOfItem(item, groups)
+  const parent = group?.parent ? groups.find((entry) => entry.id === group.parent) : undefined
+  const endDay = item.event?.endDate ?? item.endDate
+  const days = endDay && endDay !== item.date ? `${dayLabel(item.date)} – ${dayLabel(endDay)}` : dayLabel(item.date)
+  const time = [item.startTime, item.endTime].filter(Boolean).join(' – ')
+  const when = [days, time || uiText('calendar.card.allDay')].join(' · ')
+  const today = isoDay(new Date())
+  const overdue = item.kind === 'sourced' && !item.completed && (endDay ?? item.date) < today
+  const offsets = item.event?.reminderOffsets
+  const reminder = offsets === undefined ? '' : offsets.length ? uiText('calendar.card.reminder', { time: formatReminderTime(offsets[0]) }) : ''
+  const provider = item.sourceOwner ? providers.find((entry) => entry.owner === item.sourceOwner) : undefined
+  const source = item.kind === 'noteDate' ? uiText('calendar.filter.noteDates')
+    : item.kind === 'sourced' ? provider?.integration?.localized?.[api.ui.language()]?.name ?? provider?.integration?.name ?? item.sourceOwner ?? ''
+    : item.kind === 'file' ? item.filePath?.split('/').pop() ?? ''
+    : uiText('calendar.filter.events')
+  const files = [item.filePath, ...(item.attachments ?? [])].filter((path, index, all): path is string => !!path && all.indexOf(path) === index)
+  return <div className="calendar-properties-frame" data-plugin-widget-layout="fill"><api.ui.ScrollPanel fill>
+    <div className="right-panel-body calendar-item-card" data-calendar-item-id={item.id}>
+      <h2 className={`calendar-item-title${item.completed ? ' is-done' : ''}`}>{item.title}</h2>
+      <div className={`calendar-item-line${overdue ? ' is-overdue' : ''}`}><Clock /><span>{when}</span></div>
+      {reminder && <div className="calendar-item-line"><Bell /><span>{reminder}</span></div>}
+      {item.note?.trim() && <p className="calendar-item-note">{item.note.trim()}</p>}
+      <div className="calendar-item-facts">
+        {source && <span className="calendar-item-fact">{source}</span>}
+        {item.kind === 'sourced' && item.completed !== undefined && <span className="calendar-item-fact">{uiText(item.completed ? 'calendar.card.done' : 'calendar.card.open')}</span>}
+        {item.priority && item.priority !== 'normal' && item.priority !== 'none' && <span className="calendar-item-fact"><Flag />{item.priority in PRIORITY_KEYS ? uiText(PRIORITY_KEYS[item.priority]) : item.priority}</span>}
+        {(group || item.group) && <span className="calendar-item-group-pill" style={{ ['--calendar-group-color' as string]: paletteCssValue(group?.color ?? 'palette:gray') }} title={group ? [parent?.name, group.name].filter(Boolean).join(' · ') : item.group}>
+          <span className="calendar-item-group-dot" aria-hidden="true" />
+          <span className="calendar-item-group-name">{parent && <span className="calendar-item-group-parent">{parent.name} · </span>}{group?.name ?? item.group}</span>
+        </span>}
+      </div>
+      {item.location?.name && <button type="button" className="calendar-item-line calendar-item-link" title={uiText('calendar.card.openLocation')} onClick={() => openLocation(item.location!)}><MapPin /><span>{item.location.name}</span></button>}
+      {!!item.tags?.length && <div className="calendar-item-tags">{item.tags.map((tag) => <span key={tag} className="calendar-item-tag">#{tag}</span>)}</div>}
+      {(item.urls ?? []).map((url) => <button key={url} type="button" className="calendar-item-line calendar-item-link" title={url}
+        onClick={(event) => { const relPath = parseAppOpenUrl(url); if (relPath) api.workspace.openFile(relPath, undefined, { newTab: api.ui.hasModKey(event) }); else void api.links.open(url) }}>
+        <Link /><span>{url.replace(/^https?:\/\//, '').replace(/\/$/, '')}</span>
+      </button>)}
+      {files.map((path) => <AttachmentCard key={path} relPath={path} />)}
+    </div>
+  </api.ui.ScrollPanel></div>
+}
+
+const PRIORITY_KEYS: Record<string, string> = { low: 'calendar.priority.low', medium: 'calendar.priority.medium', high: 'calendar.priority.high' }
+
+function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkState }): React.ReactElement {
   const [selected, setSelected] = React.useState<CalItem | null>(null)
   const [error, setError] = React.useState('')
   React.useEffect(() => {
@@ -336,8 +426,7 @@ function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkS
   if (error) return <div className="right-panel-body" role="alert">{error}</div>
   if (!item) return <Overview view={view} />
   if (!selected) return <div className="right-panel-body">{uiText('calendar.overview.loading')}</div>
-  const value = (key: 'title' | 'date' | 'endDate' | 'startTime' | 'endTime' | 'group' | 'note' | 'filePath'): string | undefined => key === 'group' ? groupOfItem(selected, groups)?.name ?? selected.group : selected[key]
-  return <div className="right-panel-body props-info"><dl className="props-info-table">{(['title', 'date', 'endDate', 'startTime', 'endTime', 'group', 'note', 'filePath'] as const).filter((key) => value(key)).map((key) => <div className="props-info-row" key={key}><dt className="props-info-key">{uiText(`calendar.field.${key}`)}</dt><dd className="props-info-value">{value(key)}</dd></div>)}</dl></div>
+  return <ItemCard item={selected} />
 }
 
 export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void {
@@ -379,22 +468,6 @@ export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void
     inspect: contextProperties,
     render: () => <Overview sources />
   }))
-  const provideNoteDates = (): (() => void) => pluginApi.interop.extensions.provide(METADATA_PANEL_SEGMENT_V1, {
-    id: 'calendar.noteDates', label: 'Note dates', labelKey: 'calendar.filter.noteDates', icon: 'push-pin', pluginSurfaces: ['main_workspace'],
-    inspect: async () => (await loadNoteDateSources())
-      .filter((source) => !source.hidden)
-      .map((source) => ({ id: source.id, label: source.title || uiText('calendar.noteDatePreset.blank'), value: source.visible, type: 'boolean' as const })),
-    render: () => <div className="right-panel-body"><NoteDateSourceFilterList embedded /></div>
-  })
-  // The Note dates tab exists only while the Note dates switch is on.
-  let offNoteDates: (() => void) | null = null
-  const syncNoteDates = (): void => {
-    const enabled = pluginApi.settings.get()[NOTE_DATES_ENABLED_KEY] !== false
-    if (enabled && !offNoteDates) offNoteDates = provideNoteDates()
-    else if (!enabled && offNoteDates) { offNoteDates(); offNoteDates = null }
-  }
-  syncNoteDates()
-  offs.push(pluginApi.settings.subscribe(syncNoteDates), () => { offNoteDates?.(); offNoteDates = null })
   let refreshing = 0
   const refreshSelected = (): void => {
     const generation = ++refreshing
