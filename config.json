@@ -45,10 +45,12 @@
       "label": "Note dates",
       "labelKey": "plugin.calendar.section.dates",
       "icon": "calendar-days",
+      "layout": "fill",
       "storage": [
         ".valley/plugins/data/calendar/",
         ".valley/assets/icons/calendar-icon/"
-      ]
+      ],
+      "visibleWhenSetting": "noteDatesEnabled"
     },
     {
       "id": "plugins",
@@ -2983,6 +2985,60 @@
         },
         "default": [],
         "labelKey": "auto.c46325ccec8f"
+      },
+      {
+        "key": "noteDatesEnabled",
+        "label": "Note dates",
+        "type": "custom",
+        "settingsVisible": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "default": true,
+        "labelKey": "calendar.filter.noteDates"
+      },
+      {
+        "key": "groupFilter",
+        "label": "Shown groups",
+        "labelKey": "calendar.settings.groupFilter",
+        "type": "custom",
+        "settingsVisible": false,
+        "schema": {
+          "type": "array",
+          "maxItems": 400,
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "default": []
+      },
+      {
+        "key": "groupsSectionFolded",
+        "label": "Folded Groups section",
+        "labelKey": "calendar.settings.groupsSectionFolded",
+        "type": "custom",
+        "settingsVisible": false,
+        "schema": {
+          "type": "boolean"
+        },
+        "default": false
+      },
+      {
+        "key": "collapsedGroups",
+        "label": "Folded sidebar groups",
+        "labelKey": "calendar.settings.collapsedGroups",
+        "type": "custom",
+        "settingsVisible": false,
+        "schema": {
+          "type": "array",
+          "maxItems": 400,
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          }
+        },
+        "default": []
       },
       {
         "key": "localGroups",

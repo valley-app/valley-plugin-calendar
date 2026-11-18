@@ -33,6 +33,7 @@ import { gridHourWindow } from '../src/WeekGrid'
 import { presetNoteDateSource } from '../src/noteDates'
 import { CalendarAgendaCard, calendarItemMenuItems, eventMenuItems, eventToItem, openItemInCalendarMain, sourcedToItem, type CalItem } from '../src/items'
 import { Settings as CalendarSettings } from '../src/Settings'
+import { ReminderDefaults, ReminderOffsets } from '../src/ReminderOffsets'
 import CALENDAR_PLUGIN_CONFIG from '../config.json'
 import { rangeDays } from '../src/timeControl'
 import { calendarItemColor, deduplicateCalendarItems } from '../src/useCalendarItems'
@@ -646,18 +647,20 @@ describe('Calendar shell chrome', () => {
     expect(screen.getByRole('switch', { name: 'To-Do' })).toBeChecked()
   })
 
-  it('uses shared groups and the existing visibility filter in a separate Groups tab', async () => {
+  it('uses shared groups and the Groups section filter in a separate Groups tab', async () => {
     const mock = setupCalendarApi({ groups: [{ id: 'field', name: 'Field work', color: paletteRef('green') }] })
     const segment = mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).find((entry) => entry.extension.id === 'calendar.groups')!.extension
     const { container } = render(React.createElement(React.Fragment, null, segment.render({ relPath: '', kind: 'unsupported' })))
-    expect(container.querySelector('.props-info-row dt')).toHaveTextContent('Field work')
-    const groupSwitch = screen.getByRole('switch', { name: 'Field work' })
-    expect(groupSwitch.closest('.calendar-filter-property-row')).toHaveClass('calendar-filter-property-row')
-    await act(async () => fireEvent.click(groupSwitch))
-    expect(mock.api.settings.get().hiddenGroups).toEqual(['field'])
-    expect(screen.getByRole('switch', { name: 'Field work' })).not.toBeChecked()
-    await act(async () => { await mock.api.settings.set('hiddenGroups', []) })
-    expect(screen.getByRole('switch', { name: 'Field work' })).toBeChecked()
+    expect(container.querySelector('.calendar-groups.embedded')).toBeInTheDocument()
+    const row = screen.getByRole('button', { name: /^Field work/ })
+    expect(screen.getByRole('button', { name: /^All entries/ })).toHaveAttribute('aria-pressed', 'true')
+    await act(async () => fireEvent.click(row))
+    expect(mock.api.settings.get().groupFilter).toEqual(['field'])
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Field work/ })).toHaveAttribute('aria-pressed', 'true'))
+    expect(await segment.inspect!({ relPath: '', kind: 'unsupported' })).toEqual([expect.objectContaining({ id: 'field', value: true })])
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^All entries/ })))
+    expect(mock.api.settings.get().groupFilter).toEqual([])
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Field work/ })).toHaveAttribute('aria-pressed', 'false'))
     fireEvent.click(screen.getByRole('button', { name: 'Manage groups' }))
     expect(mock.api.workspace.openOwnSettings).toHaveBeenCalledWith()
     expect(mock.api.workspace.setGroups).not.toHaveBeenCalled()
@@ -681,15 +684,14 @@ describe('Calendar shell chrome', () => {
     ])
 
     const { container } = render(React.createElement(React.Fragment, null, segment.render({ relPath: '', kind: 'unsupported' })))
-    const birthdays = await screen.findByRole('switch', { name: 'Birthdays' })
-    const deadlines = screen.getByRole('switch', { name: 'Deadlines' })
-    expect(birthdays).toBeChecked()
-    await waitFor(() => expect(deadlines).not.toBeChecked())
-    await waitFor(() => expect([...container.querySelectorAll('.calendar-filter-option-count')].map((node) => node.textContent)).toEqual(['1', '1']))
+    const birthdays = await screen.findByRole('button', { name: 'Hide “Birthdays” in the calendar' })
+    expect(birthdays).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Show “Deadlines” in the calendar' })).toHaveAttribute('aria-pressed', 'false'))
+    expect([...container.querySelectorAll('.notedate-tree-source .notedate-row-count')].map((node) => node.textContent)).toEqual(['1', '1'])
 
-    await act(async () => fireEvent.click(deadlines))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Show “Deadlines” in the calendar' })))
     await waitFor(() => expect(mock.datasets.get('calendar.note_date_sources')?.find((row) => row.id === 'deadlines')?.definition).toMatchObject({ visible: true }))
-    expect(screen.getByRole('switch', { name: 'Deadlines' })).toBeChecked()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hide “Deadlines” in the calendar' })).toHaveAttribute('aria-pressed', 'true'))
   })
 
   it('shows an icon beside every day-menu action', async () => {
@@ -1609,13 +1611,13 @@ describe('AgendaPanel item clicks', () => {
     flushTimeControl()
   })
 
-  it('keeps only Today and the page button in the header and opens sources, groups and note dates inline from icon segments', async () => {
+  it('keeps only Today and the page button in the header and opens sources and note dates inline from icon segments', async () => {
     const { container } = await act(async () => render(React.createElement(AgendaPanel)))
 
     const sources = await screen.findByRole('button', { name: 'Sources' })
     expect(screen.queryByRole('button', { name: /daily note/i })).toBeNull()
     expect([...container.querySelectorAll('.panel-header .agenda-header-actions > button')].every((button) => button.matches('.plugin-open-page, .agenda-today-btn'))).toBe(true)
-    expect([...container.querySelectorAll('.agenda-filter-bar > button')].map((button) => button.getAttribute('aria-label'))).toEqual(['Sources', 'Groups', 'Note dates'])
+    expect([...container.querySelectorAll('.agenda-filter-bar > button')].map((button) => button.getAttribute('aria-label'))).toEqual(['Sources', 'Note dates'])
     for (const button of container.querySelectorAll('.agenda-filter-bar > button')) {
       expect(button.textContent).toBe('')
       expect(button.querySelector('svg')).toBeInTheDocument()
@@ -1659,14 +1661,21 @@ describe('AgendaPanel item clicks', () => {
     await waitFor(() => expect(button).toHaveClass('filtered'))
     await act(async () => fireEvent.click(button))
     expect(button).toHaveAttribute('aria-pressed', 'true')
-    const rows = [...document.querySelectorAll('.notedate-sidebar-source')]
-    expect(rows.map(row => row.querySelector('.notedate-sidebar-title')?.textContent)).toEqual(['Birthdays', 'Deadlines'])
-    expect(rows.map(row => row.querySelector('.calendar-filter-option-count')?.textContent)).toEqual(['1', '1'])
-    expect(screen.getByRole('switch', { name: 'Birthdays' })).toBeChecked()
-    expect(screen.getByRole('switch', { name: 'Deadlines' })).not.toBeChecked()
-    await act(async () => fireEvent.click(screen.getByRole('switch', { name: 'Deadlines' })))
+    const rows = [...document.querySelectorAll('.notedate-tree-source')]
+    expect(rows.map(row => row.querySelector('.notedate-row-title')?.textContent)).toEqual(['Birthdays', 'Deadlines'])
+    expect(rows.map(row => row.querySelector('.notedate-row-count')?.textContent)).toEqual(['1', '1'])
+    expect(document.querySelector('.agenda-filter-panel-noteDates [role="switch"]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Hide “Birthdays” in the calendar' })).toHaveAttribute('aria-pressed', 'true')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Show “Deadlines” in the calendar' })))
     await waitFor(() => expect(mock.datasets.get('calendar.note_date_sources')?.find((row) => row.id === 'deadlines')?.definition).toMatchObject({ visible: true }))
-    expect(screen.getByRole('switch', { name: 'Deadlines' })).toBeChecked()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hide “Deadlines” in the calendar' })).toHaveAttribute('aria-pressed', 'true'))
+    await act(async () => fireEvent.click(rows[0]))
+    const fern = [...document.querySelectorAll('.notedate-tree-row')].find(row => row.querySelector('.notedate-row-title')?.textContent === 'Fern')
+    expect(fern).toBeTruthy()
+    await act(async () => fireEvent.click(fern!))
+    expect(mock.api.workspace.openMainTab).toHaveBeenCalled()
+    await act(async () => fireEvent.doubleClick(fern!))
+    expect(mock.api.workspace.openFile).toHaveBeenCalledWith('Contacts/Fern.md', undefined, undefined)
     expect(button).toHaveAttribute('aria-pressed', 'true')
     await waitFor(() => expect(button).not.toHaveClass('filtered'))
   })
@@ -1693,42 +1702,56 @@ describe('AgendaPanel item clicks', () => {
     expect(screen.getByText('Agenda event')).toBeInTheDocument()
   })
 
-  it('merges adjacent Calendar group selections into independent rounded runs', async () => {
+  it('opens Note dates over the whole sidebar and drops it when the Note dates switch is off', async () => {
+    const { container } = await act(async () => render(React.createElement(AgendaPanel)))
+    const button = await screen.findByRole('button', { name: 'Note dates' })
+    expect(container.querySelector('.agenda-main')).not.toHaveAttribute('hidden')
+    await act(async () => fireEvent.click(button))
+    expect(container.querySelector('.agenda-main')).toHaveAttribute('hidden')
+    expect(container.querySelector('.agenda-filter-panel-noteDates .notedate-sidebar-bar')).toBeInTheDocument()
+    await act(async () => { await mock.api.settings.set('noteDatesEnabled', false) })
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Note dates' })).toBeNull())
+    expect(container.querySelector('.agenda-filter-panel-noteDates')).toBeNull()
+    expect(container.querySelector('.agenda-main')).not.toHaveAttribute('hidden')
+    expect([...container.querySelectorAll('.agenda-filter-bar > button')].map((entry) => entry.getAttribute('aria-label'))).toEqual(['Sources'])
+    const segments = (): string[] => mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).map((entry) => entry.extension.id)
+    expect(segments()).not.toContain('calendar.noteDates')
+    await act(async () => { await mock.api.settings.set('noteDatesEnabled', true) })
+    expect(segments()).toContain('calendar.noteDates')
+  })
+
+  it('filters by the Groups section under the search field like Contacts', async () => {
     mock = setupCalendarApi({
       groups: [
         { id: 'apple', name: 'Apple', color: 'palette:gray' },
-        { id: 'next', name: 'Next', color: 'palette:purple' },
         { id: 'pixar', name: 'Pixar', color: 'palette:orange' },
-        { id: 'design', name: 'Design', color: 'palette:cyan' },
-        { id: 'focus', name: 'Focus', color: 'palette:green' }
-      ]
+        { id: 'studio', name: 'Studio', color: 'palette:cyan', parent: 'pixar' }
+      ],
+      events: [{ id: 'loose', title: 'Loose event', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-07-12', filePath: 'Notes/Loose.md' } as DataRecord]
     })
-    await act(async () => render(React.createElement(AgendaPanel)))
+    const { container } = await act(async () => render(React.createElement(AgendaPanel)))
+    const section = container.querySelector('.calendar-groups')!
+    expect(section.previousElementSibling).toHaveClass('search-field-row')
+    const labels = (): string[] => [...section.querySelectorAll('.calendar-groups-row .calendar-groups-label')].map((node) => node.textContent ?? '')
+    await screen.findByText('Loose event')
+    await waitFor(() => expect(labels()).toEqual(['All entries', 'Apple', 'Pixar', 'Studio', 'No group']))
+    expect(section.querySelector('.calendar-groups-row[data-group-id="studio"]')).toHaveClass('sub')
 
-    await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Groups' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Pixar/ })))
+    expect(mock.api.settings.get().groupFilter).toEqual(['pixar'])
+    await waitFor(() => expect(section.querySelector('.calendar-groups-summary')).toHaveTextContent('Pixar'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Apple/ }), { shiftKey: true }))
+    expect(mock.api.settings.get().groupFilter).toEqual(['pixar', 'apple'])
+    await waitFor(() => expect(section.querySelector('.calendar-groups-summary')).toHaveTextContent('2 selected'))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Show all entries' })))
+    expect(mock.api.settings.get().groupFilter).toEqual([])
 
-    const apple = screen.getByRole('button', { name: /^Apple/ })
-    const next = screen.getByRole('button', { name: /^Next/ })
-    const pixar = screen.getByRole('button', { name: /^Pixar/ })
-    const design = screen.getByRole('button', { name: /^Design/ })
-    const focus = screen.getByRole('button', { name: /^Focus/ })
-    expect(apple).toHaveClass('active', 'selection-run-start')
-    expect(apple).not.toHaveClass('selection-run-end')
-    expect(next).toHaveClass('active', 'selection-run-end')
-    expect(next).not.toHaveClass('selection-run-start')
-    expect(pixar).not.toHaveClass('active', 'selection-run-start', 'selection-run-end')
-    expect(design).toHaveClass('active', 'selection-run-start')
-    expect(design).not.toHaveClass('selection-run-end')
-    expect(focus).toHaveClass('active', 'selection-run-end')
-    expect(focus).not.toHaveClass('selection-run-start')
-
-    const disposeStyles = injectCalendarStyles()
-    const css = document.getElementById('notes-calendar-styles')?.textContent ?? ''
-    expect(css).toContain('.calendar-filter-option.active:hover {\n  background: color-mix(in srgb, var(--title-color) 14%, transparent);')
-    expect(css).toContain('.calendar-filter-option.active:has(+ .calendar-filter-option:hover)')
-    expect(css).toContain('.calendar-filter-option:hover + .calendar-filter-option.active')
-    disposeStyles()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Hide the subgroups of Pixar' })))
+    await waitFor(() => expect(labels()).toEqual(['All entries', 'Apple', 'Pixar', 'No group']))
+    expect(mock.api.settings.get().collapsedGroups).toEqual(['pixar'])
+    await act(async () => fireEvent.click(section.querySelector('.calendar-groups-title')!))
+    await waitFor(() => expect(section.querySelector('.calendar-groups-list')).toBeNull())
+    expect(mock.api.settings.get().groupsSectionFolded).toBe(true)
   })
 
   it('orders dated sections newest to oldest', async () => {
@@ -2197,18 +2220,20 @@ describe('Note dates settings section', () => {
 
     setupRule({ matchValue: 'species' })
     const { container } = render(React.createElement(CalendarSettings, { section: 'dates' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Details: Emergence dates' }))
     const stats = await waitFor(() => {
       const el = container.querySelector('.notedate-source-stats')
       expect(el).toBeInTheDocument()
       return el as HTMLElement
     })
-    expect(stats.textContent).toBe('2 notes match · 1 with a usable date')
+    expect(stats.textContent).toBe('2 notes found · 1 with a usable date')
     expect(stats).not.toHaveClass('warn')
 
     // The exact live-realm failure: a plural value nothing in the realm uses.
     cleanup()
     setupRule({ matchValue: 'animals' })
     const missed = render(React.createElement(CalendarSettings, { section: 'dates' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Details: Emergence dates' }))
     const warn = await waitFor(() => {
       const el = missed.container.querySelector('.notedate-source-stats')
       expect(el).toBeInTheDocument()
@@ -2221,9 +2246,10 @@ describe('Note dates settings section', () => {
     cleanup()
     setupRule({ matchValue: 'species', dateField: 'date' })
     const undated = render(React.createElement(CalendarSettings, { section: 'dates' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Details: Emergence dates' }))
     await waitFor(() => {
       expect(undated.container.querySelector('.notedate-source-stats')?.textContent).toBe(
-        '2 notes match · none has a usable date'
+        '2 notes found · none has a usable “date”'
       )
     })
   })
@@ -2639,3 +2665,49 @@ describe('compact draft dismissal', () => {
     expect(close).toHaveBeenCalledOnce()
   })
 })
+
+describe('Calendar reminders like To-Do', () => {
+  it('turns note dates on and off from the Notes section with a pencil to their page', async () => {
+    const mock = setupCalendarApi()
+    render(React.createElement(CalendarSettings, {}))
+    const toggle = await screen.findByRole('switch', { name: 'Show note dates' })
+    expect(toggle).toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Note dates' }))
+    expect(mock.api.workspace.openOwnSettings).toHaveBeenCalledWith('dates')
+    await act(async () => fireEvent.click(toggle))
+    expect(mock.api.settings.get().noteDatesEnabled).toBe(false)
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Configure Note dates' })).toBeNull())
+    expect((CALENDAR_PLUGIN_CONFIG.settingsSections as Array<{ id: string; visibleWhenSetting?: string }>).find((section) => section.id === 'dates')?.visibleWhenSetting).toBe('noteDatesEnabled')
+  })
+
+  it('sets the default reminder as Off or one time before in hh:mm', async () => {
+    const mock = setupCalendarApi()
+    render(React.createElement(ReminderDefaults))
+    const input = screen.getByRole('textbox', { name: 'Time before (hh:mm)' }) as HTMLInputElement
+    expect(input.value).toBe('00:10')
+    fireEvent.change(input, { target: { value: '1:7a5' } })
+    expect(input.value).toBe('1:75')
+    await act(async () => fireEvent.blur(input))
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter hours and minutes like 00:10')
+    fireEvent.change(input, { target: { value: '1:30' } })
+    await act(async () => fireEvent.keyDown(input, { key: 'Enter' }))
+    expect(mock.api.settings.get().reminderOffsets).toEqual([90])
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('gives an event the default, Off or one custom time before', async () => {
+    setupCalendarApi()
+    const onChange = vi.fn()
+    const { rerender } = render(React.createElement(ReminderOffsets, { value: undefined, onChange }))
+    expect(screen.queryByRole('textbox', { name: 'Time before (hh:mm)' })).toBeNull()
+    rerender(React.createElement(ReminderOffsets, { value: [10, 60], onChange }))
+    const input = screen.getByRole('textbox', { name: 'Time before (hh:mm)' }) as HTMLInputElement
+    expect(input.value).toBe('00:10')
+    fireEvent.change(input, { target: { value: '02:00' } })
+    await act(async () => fireEvent.blur(input))
+    expect(onChange).toHaveBeenLastCalledWith([120])
+    rerender(React.createElement(ReminderOffsets, { value: [10], onChange, timed: false, time: '', onTimeChange: vi.fn() }))
+    expect(screen.getByText('Choose a time for this date-only item.')).toBeInTheDocument()
+  })
+})
+

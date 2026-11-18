@@ -42,6 +42,28 @@ export const ChevronRight = (p: IconProps): ReactElement => (
   <Svg {...p}><path d="m9 18 6-6-6-6" /></Svg>
 )
 
+export const ChevronDown = (p: IconProps): ReactElement => (
+  <Svg {...p}><path d="m6 9 6 6 6-6" /></Svg>
+)
+
+export const MoreHorizontal = (p: IconProps): ReactElement => (
+  <Svg {...p}><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></Svg>
+)
+
+export const Settings = (p: IconProps): ReactElement => (
+  <Svg {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z" /><circle cx="12" cy="12" r="3" /></Svg>
+)
+
+/** Lucide `chevrons-down-up` — collapse all, as in the Files header. */
+export const ChevronsDownUp = (p: IconProps): ReactElement => (
+  <Svg {...p}><path d="m7 20 5-5 5 5M7 4l5 5 5-5" /></Svg>
+)
+
+/** Lucide `chevrons-up-down` — expand all, as in the Files header. */
+export const ChevronsUpDown = (p: IconProps): ReactElement => (
+  <Svg {...p}><path d="m7 15 5 5 5-5M7 9l5-5 5 5" /></Svg>
+)
+
 /** Header filter: which sources feed the surface (events, To-Do, note dates). */
 export const Layers = (p: IconProps): ReactElement => (
   <Svg {...p}>

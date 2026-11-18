@@ -7,11 +7,13 @@ import {
   DEFAULT_DAY_START_HOUR,
   HIDDEN_SOURCES_KEY,
   ITEM_CLICK_TARGET_KEY,
+  NOTE_DATES_ENABLED_KEY,
   useCalendarSettings,
 } from './settingsStore'
 import { NoteDatesSection } from './NoteDateSettings'
 import { LocalGroupsSettings } from './LocalGroupsSettings'
 import { uiText } from './localization'
+import { Pencil } from './icons'
 import { configureSource, useCalendarSourceProviders } from './itemSources'
 
 function DayWindowEditor({
@@ -61,8 +63,30 @@ function GroupsSection(): ReactElement {
   return <Section><GroupsEditor /></Section>
 }
 
+/**
+ * The Note dates switch (18 Nov, like Map's Map pins switch): on shows the
+ * pencil to the Note dates page; off hides that page and every note date.
+ */
+function NoteDatesFeature({ enabled }: { enabled: boolean }): ReactElement {
+  const { Row, Section, Toggle, IconButton } = api.ui.settings
+  return (
+    <Section title={uiText('calendar.noteDatesFeature.section')}>
+      <Row title={uiText('calendar.filter.noteDates')} description={uiText('calendar.noteDatesFeature.description')}>
+        <div className="settings-row-control">
+          {enabled && (
+            <IconButton ariaLabel={uiText('calendar.noteDatesFeature.configure')} title={uiText('calendar.noteDatesFeature.configure')} onClick={() => api.workspace.openOwnSettings('dates')}>
+              <Pencil />
+            </IconButton>
+          )}
+          <Toggle checked={enabled} onChange={(value) => void api.settings.set(NOTE_DATES_ENABLED_KEY, value)} label={uiText('calendar.noteDatesFeature.toggle')} />
+        </div>
+      </Row>
+    </Section>
+  )
+}
+
 function CalendarSection(): ReactElement {
-  const { dayStartHour, dayEndHour, itemClickTarget } = useCalendarSettings()
+  const { dayStartHour, dayEndHour, itemClickTarget, noteDatesEnabled } = useCalendarSettings()
   const { Row, Section, SelectField, RealmFolderField } = api.ui.settings
   return (
     <>
@@ -84,6 +108,7 @@ function CalendarSection(): ReactElement {
         </Row>
         <DayWindowEditor dayStartHour={dayStartHour} dayEndHour={dayEndHour} />
       </Section>
+      <NoteDatesFeature enabled={noteDatesEnabled} />
       <Section>
         <Row title={uiText('calendar.daily.folder')}><RealmFolderField value={calendarFolder('dailyNotesFolder')} ariaLabel={uiText('calendar.daily.folder')} onChange={() => {}} onCommit={value => void api.settings.set('dailyNotesFolder', value)} /></Row>
         <Row title={uiText('calendar.files.folder')}><RealmFolderField value={calendarFolder('calendarFolder')} ariaLabel={uiText('calendar.files.folder')} onChange={() => {}} onCommit={value => void api.settings.set('calendarFolder', value)} /></Row>

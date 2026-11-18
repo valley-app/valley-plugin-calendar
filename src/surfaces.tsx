@@ -7,11 +7,12 @@ import { calendarItemKey, type CalItem } from './items'
 import { calendarLinkPatch, calendarLinkState, calendarViewMode, defaultTimeControl, saveCalendarViewMode } from './timeControl'
 import { onChanged } from './events'
 import { groupOfItem } from './localGroups'
-import { EVENTS_SOURCE_ID, HIDDEN_GROUPS_KEY, HIDDEN_SOURCES_KEY, NOTE_DATES_SOURCE_ID, readCalendarSettings, useCalendarSettings } from './settingsStore'
+import { EVENTS_SOURCE_ID, HIDDEN_SOURCES_KEY, NOTE_DATES_ENABLED_KEY, NOTE_DATES_SOURCE_ID, readCalendarSettings, useCalendarSettings } from './settingsStore'
 import { uiText } from './localization'
 import { resolveCalendarTarget } from './commands'
+import { useCalendarItems } from './useCalendarItems'
 import { sourceDescriptors, useCalendarSourceProviders } from './itemSources'
-import { CalendarFilterList, NoteDateSourceFilterList } from './filters'
+import { CalendarFilterList, GroupsSection, NoteDateSourceFilterList } from './filters'
 import { loadNoteDateSources } from './noteDateStore'
 import { addDays, isoDay, isoWeek, localizedMonth, parseLocalDate, startOfWeek } from './dateMath'
 import { WEEK_START_INDEX } from './lib'
@@ -251,7 +252,7 @@ async function contextProperties(): Promise<PluginProperty[]> {
   const settings = readCalendarSettings()
   const sources = [
     { id: EVENTS_SOURCE_ID, name: uiText('calendar.filter.events') },
-    { id: NOTE_DATES_SOURCE_ID, name: uiText('calendar.filter.noteDates') },
+    ...(settings.noteDatesEnabled ? [{ id: NOTE_DATES_SOURCE_ID, name: uiText('calendar.filter.noteDates') }] : []),
     ...sourceDescriptors().map((source) => ({ id: source.sourceKey, name: source.integration?.localized?.[api.ui.language()]?.name ?? source.integration?.name ?? source.owner }))
   ].filter((source) => !settings.hiddenSources.includes(source.id))
   return [
@@ -299,7 +300,7 @@ function Overview({ view, sources = false }: { view?: PluginLinkState; sources?:
   return <div className="right-panel-body props-info">
     {sources && <CalendarFilterList embedded label={uiText('calendar.filter.sources')} options={[
       { id: EVENTS_SOURCE_ID, label: uiText('calendar.filter.events') },
-      { id: NOTE_DATES_SOURCE_ID, label: uiText('calendar.filter.noteDates') },
+      ...(settings.noteDatesEnabled ? [{ id: NOTE_DATES_SOURCE_ID, label: uiText('calendar.filter.noteDates') }] : []),
       ...providers.map((source) => ({ id: source.sourceKey, label: source.integration?.localized?.[api.ui.language()]?.name ?? source.integration?.name ?? source.owner }))
     ]} hidden={settings.hiddenSources} settingsKey={HIDDEN_SOURCES_KEY} emptyText={uiText('calendar.overview.none')} />}
     <dl className="props-info-table">{(sources ? details.filter((field) => field.id !== 'sources') : viewProperties(view)).map((field) => <div className="props-info-row" key={field.id}><dt className="props-info-key">{field.label}</dt><dd className="props-info-value">{overviewValue(field)}</dd></div>)}</dl>
@@ -309,7 +310,11 @@ function Overview({ view, sources = false }: { view?: PluginLinkState; sources?:
 
 function GroupProperties(): React.ReactElement {
   const settings = useCalendarSettings()
-  return <div className="right-panel-body props-info"><CalendarFilterList embedded label={uiText('calendar.filter.groups')} options={settings.groups.map((group) => ({ id: group.id, label: group.name, color: group.color, sub: group.parent !== undefined }))} hidden={settings.hiddenGroups} settingsKey={HIDDEN_GROUPS_KEY} emptyText={uiText('calendar.overview.none')} onOpenSettings={() => api.workspace.openOwnSettings()} /></div>
+  const { groupCounts } = useCalendarItems()
+  return <div className="right-panel-body props-info">
+    <div className="props-info-actions"><button type="button" onClick={() => api.workspace.openOwnSettings()}>{uiText('calendar.properties.manageGroups')}</button></div>
+    {settings.groups.length ? <GroupsSection embedded groups={settings.groups} counts={groupCounts} /> : <p className="props-info-hint">{uiText('calendar.overview.none')}</p>}
+  </div>
 }
 
 function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkState }): React.ReactElement {
@@ -366,7 +371,7 @@ export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void
   }))
   offs.push(pluginApi.interop.extensions.provide(METADATA_PANEL_SEGMENT_V1, {
     id: 'calendar.groups', label: 'Groups', labelKey: 'calendar.filter.groups', icon: 'group', pluginSurfaces: ['main_workspace'],
-    inspect: () => { const settings = readCalendarSettings(); return settings.groups.map((group) => ({ id: group.id, label: group.name, value: !settings.hiddenGroups.includes(group.id), type: 'boolean' as const })) },
+    inspect: () => { const settings = readCalendarSettings(); const selected = new Set(settings.groupFilter); return settings.groups.map((group) => ({ id: group.id, label: group.name, value: selected.size === 0 || selected.has(group.id) || (group.parent !== undefined && selected.has(group.parent)), type: 'boolean' as const })) },
     render: () => <GroupProperties />
   }))
   offs.push(pluginApi.interop.extensions.provide(METADATA_PANEL_SEGMENT_V1, {
@@ -374,13 +379,22 @@ export function registerCalendarSurfaces(pluginApi: ValleyPluginApi): () => void
     inspect: contextProperties,
     render: () => <Overview sources />
   }))
-  offs.push(pluginApi.interop.extensions.provide(METADATA_PANEL_SEGMENT_V1, {
+  const provideNoteDates = (): (() => void) => pluginApi.interop.extensions.provide(METADATA_PANEL_SEGMENT_V1, {
     id: 'calendar.noteDates', label: 'Note dates', labelKey: 'calendar.filter.noteDates', icon: 'push-pin', pluginSurfaces: ['main_workspace'],
     inspect: async () => (await loadNoteDateSources())
       .filter((source) => !source.hidden)
       .map((source) => ({ id: source.id, label: source.title || uiText('calendar.noteDatePreset.blank'), value: source.visible, type: 'boolean' as const })),
     render: () => <div className="right-panel-body"><NoteDateSourceFilterList embedded /></div>
-  }))
+  })
+  // The Note dates tab exists only while the Note dates switch is on.
+  let offNoteDates: (() => void) | null = null
+  const syncNoteDates = (): void => {
+    const enabled = pluginApi.settings.get()[NOTE_DATES_ENABLED_KEY] !== false
+    if (enabled && !offNoteDates) offNoteDates = provideNoteDates()
+    else if (!enabled && offNoteDates) { offNoteDates(); offNoteDates = null }
+  }
+  syncNoteDates()
+  offs.push(pluginApi.settings.subscribe(syncNoteDates), () => { offNoteDates?.(); offNoteDates = null })
   let refreshing = 0
   const refreshSelected = (): void => {
     const generation = ++refreshing

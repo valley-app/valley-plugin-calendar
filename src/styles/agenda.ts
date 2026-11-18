@@ -6,7 +6,7 @@ export const agendaStyles = `/* ── Agenda panel header actions ────�
   color:var(--title-color); -webkit-app-region:no-drag; }
 .agenda-today-btn:hover { background:var(--hover-bg); }
 
-/* Sources, groups and note dates: a row of icon segments that opens one list
+/* Sources and note dates: a row of icon segments that opens one list
    inline, selected like the Properties segment switcher. */
 .agenda-filter-bar { display:flex; align-items:center; gap:var(--space-1); flex:0 0 auto; height:var(--app-bar-height); box-sizing:border-box;
   padding:0 var(--space-2); border-bottom:1px solid var(--border-light); }
@@ -18,8 +18,55 @@ export const agendaStyles = `/* ── Agenda panel header actions ────�
 .agenda-filter-seg.active { background:var(--accent-tint-bg); color:var(--title-color); }
 .agenda-filter-seg svg { width:var(--shell-glyph-medium, 16px); height:var(--shell-glyph-medium, 16px); }
 .agenda-filter-panel { flex:0 0 auto; max-height:45%; overflow:auto; padding:calc(var(--space-3) / 2); border-bottom:1px solid var(--border-light); }
-.agenda-filter-panel-noteDates { padding:0; }
+.agenda-filter-panel-noteDates { flex:1 1 0; max-height:none; min-height:0; padding:0; border-bottom:none; }
+/* Search, Groups and the day list; hidden while the Note dates list fills the sidebar. */
+.agenda-main { display:flex; flex:1 1 0; flex-direction:column; min-height:0; }
+.agenda-main[hidden] { display:none; }
 .agenda-filter-panel .calendar-filter-list { max-height:none; overflow:visible; }
+
+/* The Groups section under the search field, as in Contacts (18 Nov): All
+   entries, the groups with their subgroups one step in, No group. Every row
+   keeps a slot for the fold chevron inside the row so the dots line up. It
+   never takes more than a third of the sidebar and scrolls inside itself. */
+.calendar-groups { display:flex; flex-direction:column; flex:0 0 auto; min-height:0; max-height:34%; margin:0 5px 4px; padding-bottom:6px;
+  border-bottom:1px solid var(--border-light); }
+.calendar-groups.folded { padding-bottom:2px; }
+.calendar-groups.embedded { max-height:none; margin:0; border-bottom:none; }
+.calendar-groups-head { display:flex; align-items:center; gap:2px; flex:none; min-height:28px; }
+.calendar-groups-title { display:flex; align-items:center; gap:6px; flex:1; min-width:0; height:26px; padding:0 4px; border:none;
+  border-radius:var(--radius-sm); background:none; color:var(--text-tertiary); font-family:var(--interface-font);
+  font-size:var(--small-font-size); font-weight:var(--font-semi-bold); text-align:left; cursor:pointer; }
+.calendar-groups-title:hover { color:var(--title-color); }
+.calendar-groups-title:focus-visible, .calendar-groups-row:focus-visible { outline:2px solid var(--accent-color); outline-offset:-2px; }
+.calendar-groups-title:focus:not(:focus-visible), .calendar-groups-row:focus:not(:focus-visible) { outline:none; }
+.calendar-groups-chevron { display:inline-grid; place-items:center; width:18px; height:18px; flex:none; margin-right:-2px; }
+.calendar-groups-chevron svg { width:12px; height:12px; }
+.calendar-groups-name { flex:none; }
+.calendar-groups-summary { min-width:0; overflow:hidden; color:var(--title-color); font-weight:var(--font-normal, 400);
+  text-overflow:ellipsis; white-space:nowrap; }
+.calendar-groups-head .panel-tool-btn { flex:none; }
+/* A mouse click leaves no focus box; the ring is for keyboard focus only. */
+.calendar-groups-head .panel-tool-btn:focus:not(:focus-visible) { outline:none; box-shadow:none; }
+.calendar-groups-list { display:flex; flex-direction:column; gap:2px; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.calendar-groups-item { position:relative; flex:none; }
+.calendar-groups-row { display:flex; align-items:center; gap:6px; width:100%; min-height:28px; padding:4px 7px 4px 24px;
+  border:none; border-radius:var(--radius-sm); background:none; color:var(--text-secondary);
+  font-family:var(--interface-font); font-size:var(--small-font-size); text-align:left; cursor:pointer; user-select:none; }
+/* The chevron lies over the row, so hovering it lights the whole row like the rest of it. */
+.calendar-groups-row:hover, .calendar-groups-item:has(.calendar-groups-fold:hover) > .calendar-groups-row { background:var(--hover-bg); color:var(--text-color); }
+/* Declared after :hover so the selected rows keep their tint under the pointer. */
+.calendar-groups-row.active, .calendar-groups-item:has(.calendar-groups-fold:hover) > .calendar-groups-row.active { background:var(--accent-tint-bg); color:var(--title-color); }
+.calendar-groups-dot { width:8px; height:8px; margin:0 3px; border-radius:50%; flex:none; background:var(--text-tertiary); }
+.calendar-groups-dot.all { box-sizing:border-box; border:1.5px solid currentColor; background:none; opacity:.75; }
+.calendar-groups-row.sub .calendar-groups-dot { margin-left:17px; }
+.calendar-groups-label { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.calendar-groups-count { flex:none; color:var(--text-tertiary); font-size:var(--smaller-font-size); font-variant-numeric:tabular-nums; }
+.calendar-groups-row.active .calendar-groups-count { color:inherit; }
+.calendar-groups-fold { position:absolute; top:50%; left:4px; z-index:1; display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; padding:0; border:none; border-radius:var(--radius-sm); background:none;
+  color:var(--text-tertiary); transform:translateY(-50%); cursor:pointer; }
+.calendar-groups-fold:hover { color:var(--title-color); }
+.calendar-groups-fold svg { width:14px; height:14px; }
 
 /* ── Agenda panel (left sidebar) ─────────────────────────────────────────── */
 .calendar-agenda-panel { width: 100%; height: 100%; min-height: 0; }

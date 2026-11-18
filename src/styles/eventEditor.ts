@@ -359,4 +359,12 @@ export const eventEditorStyles = `/* ── Calendar editor modal ────�
 .calendar-quickadd-control > * { min-width: 0 !important; width: 100% !important; max-width: 100%; }
 .calendar-quickadd-footer { padding: 8px 12px; flex-shrink: 0; }
 .calendar-quickadd-save, .calendar-quickadd-cancel { height: 26px; padding: 0 12px; }
+/* Reminders as in To-Do: Off or Custom with one hh:mm time before. */
+.calendar-reminder { display: grid; gap: 4px; min-width: 0; }
+.calendar-reminder-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.calendar-reminder-mode { width: 100%; }
+.calendar-reminder-time { box-sizing: border-box; width: 96px; flex: none; font-variant-numeric: tabular-nums; text-align: center; }
+.calendar-reminder-time.invalid { border-color: var(--negative-color); }
+.calendar-reminder-note { color: var(--text-secondary); font-size: var(--smaller-font-size); }
+.calendar-reminder-note.is-error { color: var(--negative-color); }
 `

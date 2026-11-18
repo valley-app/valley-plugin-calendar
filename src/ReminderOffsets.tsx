@@ -1,42 +1,99 @@
 import { React, api } from './runtime'
 import { uiText } from './localization'
 
-export function ReminderOffsets({ value, onChange, timed = true, time = '', onTimeChange, defaults = false }: {
-  value?: number[]; onChange(value: number[] | undefined): void; timed?: boolean; time?: string; onTimeChange?(value: string): void; defaults?: boolean
-}) {
-  const { NumberField, SelectField, Button, TimeField } = api.ui.settings
-  const [units, setUnits] = React.useState<Record<number, boolean>>({})
-  const [error, setError] = React.useState(false)
-  const mode = value === undefined ? 'default' : value.length ? 'custom' : 'off'
-  const update = (next: number[]): void => {
-    const invalid = next.some(value => !Number.isInteger(value) || value < 0 || value > 10080) || new Set(next).size !== next.length
-    setError(invalid)
-    if (!invalid) onChange(next)
+const MAX_MINUTES = 10080
+
+/** "1:30" → 90. Hours up to 168, minutes 00–59; anything else is not a time. */
+export function parseReminderTime(value: string): number | null {
+  const match = /^(\d{1,3}):([0-5]\d)$/.exec(value.trim())
+  if (!match) return null
+  const minutes = Number(match[1]) * 60 + Number(match[2])
+  return minutes <= MAX_MINUTES ? minutes : null
+}
+
+/** 90 → "01:30", 10 → "00:10". */
+export function formatReminderTime(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+}
+
+/**
+ * The hh:mm field of a reminder, as in To-Do (18 Nov): digits and one colon
+ * only, saved on blur or Enter and only when it is a valid time.
+ */
+function ReminderTime({ minutes, onCommit, onInvalid }: { minutes: number; onCommit(minutes: number): void; onInvalid(invalid: boolean): void }) {
+  const [text, setText] = React.useState(() => formatReminderTime(minutes))
+  const [invalid, setInvalid] = React.useState(false)
+  React.useEffect(() => { setText(formatReminderTime(minutes)); setInvalid(false); onInvalid(false) }, [minutes])
+  const commit = (): void => {
+    const next = parseReminderTime(text)
+    setInvalid(next === null)
+    onInvalid(next === null)
+    if (next !== null && next !== minutes) onCommit(next)
   }
-  return <div style={{ display: 'grid', gap: 8 }}>
-    <SelectField ariaLabel={uiText('reminders.title')} value={mode} onChange={mode => { setError(false); setUnits({}); onChange(mode === 'off' ? [] : mode === 'default' ? undefined : [10]) }} options={[
-      ...(!defaults ? [{ value: 'default', label: uiText('reminders.default') }] : []),
-      { value: 'off', label: uiText('reminders.off') }, { value: 'custom', label: uiText('reminders.custom') }
-    ]} />
-    {value?.map((minutes, index) => {
-      const hours = units[index] ?? (minutes > 0 && minutes % 60 === 0)
-      return <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <NumberField min={0} max={hours ? 168 : 10080} value={hours ? minutes / 60 : minutes} ariaLabel={uiText(hours ? 'reminders.hours' : 'reminders.minutes')}
-          onChange={number => { if (number !== null) update(value.map((old, i) => i === index ? number * (hours ? 60 : 1) : old)) }} />
-        <SelectField value={hours ? 'hours' : 'minutes'} ariaLabel={uiText('reminders.title')} options={[{ value: 'minutes', label: uiText('reminders.minutes') }, { value: 'hours', label: uiText('reminders.hours') }]}
-          onChange={unit => { setUnits(previous => ({ ...previous, [index]: unit === 'hours' })); update(value.map((old, i) => i === index ? (hours ? minutes / 60 : minutes) * (unit === 'hours' ? 60 : 1) : old)) }} />
-        <Button onClick={() => { setUnits({}); update(value.filter((_, i) => i !== index)) }} aria-label={uiText('reminders.remove')}>×</Button>
-      </div>
-    })}
-    {mode === 'custom' && (value?.length ?? 0) < 16 && <Button onClick={() => { let offset = 10; while (value?.includes(offset)) offset += 5; update([...(value ?? []), offset]) }}>{uiText('reminders.add')}</Button>}
-    {!timed && mode !== 'off' && onTimeChange && <TimeField value={time} onChange={onTimeChange} ariaLabel={uiText('reminders.time')} />}
-    {!timed && !time && mode !== 'off' && <span>{uiText('reminders.timeRequired')}</span>}
-    {error && <span role="alert">{uiText('reminders.invalid')}</span>}
+  return <input
+    className={`settings-control calendar-reminder-time${invalid ? ' invalid' : ''}`}
+    type="text"
+    inputMode="numeric"
+    value={text}
+    placeholder="0:10"
+    aria-label={uiText('reminders.timeBefore')}
+    aria-invalid={invalid || undefined}
+    maxLength={6}
+    onChange={(event) => { setText(event.currentTarget.value.replace(/[^\d:]/g, '').replace(/:(?=.*:)/g, '')); setInvalid(false); onInvalid(false) }}
+    onBlur={commit}
+    onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commit() } }}
+  />
+}
+
+/**
+ * An event's reminder: the plugin default, off, or one reminder a set time
+ * (hh:mm) before it starts. A date-only event also needs the time of day the
+ * reminder rings.
+ */
+export function ReminderOffsets({ value, onChange, timed = true, time = '', onTimeChange }: {
+  value?: number[]; onChange(value: number[] | undefined): void; timed?: boolean; time?: string; onTimeChange?(value: string): void
+}) {
+  const { SelectField, TimeField } = api.ui.settings
+  const [invalid, setInvalid] = React.useState(false)
+  const mode = value === undefined ? 'default' : value.length ? 'custom' : 'off'
+  return <div className="calendar-reminder">
+    <div className="calendar-reminder-row">
+      <SelectField ariaLabel={uiText('reminders.title')} value={mode} onChange={next => { setInvalid(false); onChange(next === 'off' ? [] : next === 'default' ? undefined : [value?.[0] ?? 10]) }} options={[
+        { value: 'default', label: uiText('reminders.default') }, { value: 'off', label: uiText('reminders.off') }, { value: 'custom', label: uiText('reminders.custom') }
+      ]} />
+      {mode === 'custom' && <ReminderTime minutes={value?.[0] ?? 10} onCommit={minutes => onChange([minutes])} onInvalid={setInvalid} />}
+      {!timed && mode !== 'off' && onTimeChange && <TimeField value={time} onChange={onTimeChange} ariaLabel={uiText('reminders.time')} />}
+    </div>
+    {invalid && <span className="calendar-reminder-note is-error" role="alert">{uiText('reminders.timeInvalid')}</span>}
+    {!invalid && !timed && !time && mode !== 'off' && <span className="calendar-reminder-note">{uiText('reminders.timeRequired')}</span>}
   </div>
 }
 
+/**
+ * The default reminder, as in To-Do (18 Nov): off, or one reminder a set time
+ * (hh:mm) before a timed event.
+ */
 export function ReminderDefaults() {
-  const [value, setValue] = React.useState<number[]>(() => api.settings.get().reminderOffsets as number[] ?? [10])
-  React.useEffect(() => api.settings.subscribe(() => setValue(api.settings.get().reminderOffsets as number[] ?? [10])), [])
-  return <api.ui.settings.Section title={uiText('reminders.title')}><ReminderOffsets value={value} defaults onChange={next => { void api.settings.set('reminderOffsets', next ?? [10]) }} /></api.ui.settings.Section>
+  const read = (): number[] => {
+    const raw = api.settings.get().reminderOffsets
+    return Array.isArray(raw) ? raw.filter((value): value is number => Number.isInteger(value) && value >= 0 && value <= MAX_MINUTES).slice(0, 1) : [10]
+  }
+  const [value, setValue] = React.useState<number[]>(read)
+  React.useEffect(() => api.settings.subscribe(() => setValue(read())), [])
+  const [invalid, setInvalid] = React.useState(false)
+  const { Row, Section, SelectField } = api.ui.settings
+  const mode = value.length ? 'custom' : 'off'
+  const save = (next: number[]): void => { setValue(next); void api.settings.set('reminderOffsets', next) }
+  return <Section title={uiText('reminders.title')}>
+    <Row title={uiText('reminders.defaultTitle')} description={uiText('reminders.defaultDesc')}>
+      <SelectField className="calendar-reminder-mode" ariaLabel={uiText('reminders.defaultTitle')} value={mode}
+        onChange={(next) => save(next === 'off' ? [] : [value[0] ?? 10])}
+        options={[{ value: 'off', label: uiText('reminders.off') }, { value: 'custom', label: uiText('reminders.custom') }]} />
+    </Row>
+    {mode === 'custom' && (
+      <Row title={uiText('reminders.timeBefore')} description={invalid ? <span className="calendar-reminder-note is-error" role="alert">{uiText('reminders.timeInvalid')}</span> : uiText('reminders.timeBeforeDesc')}>
+        <ReminderTime minutes={value[0] ?? 10} onCommit={minutes => save([minutes])} onInvalid={setInvalid} />
+      </Row>
+    )}
+  </Section>
 }

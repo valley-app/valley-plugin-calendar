@@ -15,7 +15,7 @@ import {
 import { eventToItem, noteDateToItem, sourcedToItem, type CalItem } from './items'
 import { useCalendarSourceProviders, type SourcedItem, type CalendarSourceError } from './itemSources'
 import { visibleItems, type ItemSourceOption } from './filters'
-import { EVENTS_SOURCE_ID, NOTE_DATES_SOURCE_ID } from './settingsStore'
+import { EVENTS_SOURCE_ID, NO_GROUP_ID, NOTE_DATES_SOURCE_ID } from './settingsStore'
 import { resolveItemColor } from './colors'
 import { uiText } from './localization'
 
@@ -32,7 +32,7 @@ export interface CalendarItems {
   noteDates: NoteDateEntry[]
   /** Everything currently feeding the surface, for the sources filter. */
   sourceOptions: ItemSourceOption[]
-  /** Record totals for the group filter, keyed by group id. */
+  /** Record totals for the group filter, keyed by group id; `NO_GROUP_ID` counts the items without a group. */
   groupCounts: Readonly<Record<string, number>>
   colorFor: (item: CalItem) => string
 }
@@ -102,9 +102,10 @@ export function deduplicateCalendarItems(items: readonly CalItem[]): CalItem[] {
 export function useCalendarItems(opts: { focusYear?: number; filePath?: string } = {}): CalendarItems {
   const { focusYear } = opts
   const currentYear = useCalendarYear()
-  const { groups: calendarGroups, hiddenGroups, hiddenSources } = useCalendarSettings()
+  const { groups: calendarGroups, groupFilter, hiddenSources, noteDatesEnabled } = useCalendarSettings()
   const providers = useCalendarSourceProviders()
-  const sources = useNoteDateSources()
+  const savedSources = useNoteDateSources()
+  const sources = React.useMemo(() => noteDatesEnabled ? savedSources : [], [noteDatesEnabled, savedSources])
   const indexEntries = useNoteIndex(sources)
 
   const years = React.useMemo(
@@ -131,8 +132,8 @@ export function useCalendarItems(opts: { focusYear?: number; filePath?: string }
     for (const item of baseItems) out.push(...(item.kind === 'event' || item.kind === 'sourced' || item.kind === 'file' ? expandSpan(item, `${years[0]}-01-01`, `${years.at(-1)}-12-31`) : [item]))
     // One filter pass for every surface: the Calendar page and the Agenda panel
     // must never disagree about what the user switched off.
-    return deduplicateCalendarItems(visibleItems(out, calendarGroups, hiddenGroups, hiddenSources))
-  }, [baseItems, calendarGroups, hiddenGroups, hiddenSources, years])
+    return deduplicateCalendarItems(visibleItems(out, calendarGroups, groupFilter, hiddenSources))
+  }, [baseItems, calendarGroups, groupFilter, hiddenSources, years])
 
   /**
    * What is on offer, whether or not it is currently switched on — a filter that
@@ -141,7 +142,7 @@ export function useCalendarItems(opts: { focusYear?: number; filePath?: string }
   const sourceOptions = React.useMemo<ItemSourceOption[]>(() => {
     const out: ItemSourceOption[] = [
       { id: EVENTS_SOURCE_ID, label: uiText('calendar.filter.events'), count: events.length + documents.items.filter(item => item.kind === 'file').length },
-      { id: NOTE_DATES_SOURCE_ID, label: uiText('calendar.filter.noteDates'), count: noteDates.length + documents.items.filter(item => item.kind === 'noteDate').length }
+      ...(noteDatesEnabled ? [{ id: NOTE_DATES_SOURCE_ID, label: uiText('calendar.filter.noteDates'), count: noteDates.length + documents.items.filter(item => item.kind === 'noteDate').length }] : []),
     ]
     const seen = new Set<string>()
     for (const provider of providers) {
@@ -155,14 +156,14 @@ export function useCalendarItems(opts: { focusYear?: number; filePath?: string }
       })
     }
     return out
-  }, [events.length, noteDates.length, providers, sourced, documents.items])
+  }, [events.length, noteDates.length, noteDatesEnabled, providers, sourced, documents.items])
 
   const groupCounts = React.useMemo<Readonly<Record<string, number>>>(() => {
     const counts: Record<string, number> = Object.fromEntries(calendarGroups.map((group) => [group.id, 0]))
     for (const item of baseItems) {
       const group = groupOfItem(item, calendarGroups)
-      if (!group) continue
-      counts[group.id] = (counts[group.id] ?? 0) + 1
+      const key = group ? group.id : NO_GROUP_ID
+      counts[key] = (counts[key] ?? 0) + 1
     }
     return counts
   }, [baseItems, calendarGroups])

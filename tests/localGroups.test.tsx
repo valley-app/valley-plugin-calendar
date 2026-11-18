@@ -19,6 +19,7 @@ import {
   type LocalGroup
 } from '../src/localGroups'
 import { visibleItems } from '../src/filters'
+import { NO_GROUP_ID, readGroupFilter } from '../src/settingsStore'
 import type { CalItem } from '../src/items'
 
 const events = vi.hoisted(() => ({ list: [] as Array<Partial<EventRecord>> }))
@@ -77,7 +78,7 @@ describe('Calendar own groups', () => {
     expect(resolveGroupId('Unknown', groups)).toBe('Unknown')
   })
 
-  it('hides an own group only when it is switched off itself, never with a shared group', () => {
+  it('shows an own group only when it is selected itself, never through a shared group', () => {
     const groups = mergedGroups(shared, local)
     const items = [
       item('in-parent', { groupId: 'copper-finch' }),
@@ -86,11 +87,22 @@ describe('Calendar own groups', () => {
       item('todo-named-errands', { kind: 'sourced', group: 'Errands' } as Partial<CalItem>),
       item('ungrouped', {})
     ]
-    expect(visibleItems(items, groups, ['copper-finch'], []).map((entry) => entry.id)).toEqual(['in-child', 'in-errands', 'todo-named-errands', 'ungrouped'])
-    expect(visibleItems(items, groups, ['local-0f9e8d7c6b5a'], []).map((entry) => entry.id)).toEqual(['in-parent', 'in-child', 'todo-named-errands', 'ungrouped'])
+    expect(visibleItems(items, groups, ['copper-finch'], []).map((entry) => entry.id)).toEqual(['in-parent'])
+    expect(visibleItems(items, groups, ['local-0f9e8d7c6b5a'], []).map((entry) => entry.id)).toEqual(['in-errands'])
+    expect(visibleItems(items, groups, [NO_GROUP_ID], []).map((entry) => entry.id)).toEqual(['todo-named-errands', 'ungrouped'])
+    expect(visibleItems(items, groups, [], []).map((entry) => entry.id)).toHaveLength(5)
   })
 
-  it('keeps one level of subgroups and hides them with their group', () => {
+  it('carries a hidden-groups list saved before the Groups section over as a selection', () => {
+    const groups = mergedGroups(shared, local)
+    const mains = groups.filter((group) => group.parent === undefined).map((group) => group.id)
+    expect(readGroupFilter(undefined, [], groups)).toEqual([])
+    expect(readGroupFilter([], [mains[0]], groups)).toEqual([...mains.slice(1), NO_GROUP_ID])
+    expect(readGroupFilter(['gone'], [mains[0]], groups)).toEqual([])
+    expect(readGroupFilter([mains[1], 'gone'], [mains[0]], groups)).toEqual([mains[1]])
+  })
+
+  it('keeps one level of subgroups and shows them with their group', () => {
     const nested = normalizeLocalGroups([
       { id: 'local-b1', name: 'Ringing', color: 'palette:blue', parent: 'local-a1' },
       { id: 'local-c1', name: 'Garden', color: 'palette:green' },
@@ -102,8 +114,8 @@ describe('Calendar own groups', () => {
     const merged = mergedGroups(shared, nested)
     expect(merged.find((group) => group.name === 'Ringing')).toMatchObject({ local: true, parent: 'local-a1' })
     const items = [item('own', { groupId: 'local-a1' }), item('sub', { groupId: 'local-b1' }), item('other', { groupId: 'local-c1' }), item('none', {})]
-    expect(visibleItems(items, merged, ['local-a1'], []).map((entry) => entry.id)).toEqual(['other', 'none'])
-    expect(visibleItems(items, merged, ['local-b1'], []).map((entry) => entry.id)).toEqual(['own', 'other', 'none'])
+    expect(visibleItems(items, merged, ['local-a1'], []).map((entry) => entry.id)).toEqual(['own', 'sub'])
+    expect(visibleItems(items, merged, ['local-b1'], []).map((entry) => entry.id)).toEqual(['sub'])
   })
 
   it('counts events per own group', () => {

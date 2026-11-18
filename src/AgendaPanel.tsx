@@ -12,8 +12,8 @@ import { selectCalendarProperties, useCalendarSurface } from './surfaces'
 import type { ReactElement } from 'react'
 import { useTimeControl } from './timeControl'
 import { useCalendarItems } from './useCalendarItems'
-import { HIDDEN_GROUPS_KEY, HIDDEN_SOURCES_KEY, useCalendarSettings } from './settingsStore'
-import { CalendarFilterList, NoteDateSourceFilterList } from './filters'
+import { HIDDEN_SOURCES_KEY, useCalendarSettings } from './settingsStore'
+import { CalendarFilterList, GroupsSection, NoteDateSourceFilterList } from './filters'
 import { useNoteDateSources } from './noteDateStore'
 import {
   CalendarAgendaCard,
@@ -21,7 +21,7 @@ import {
   openItemInCalendarMain,
   type CalItem
 } from './items'
-import { GroupGlyph, Layers, PushPin, Search, X } from './icons'
+import { Layers, PushPin, Search, X } from './icons'
 import { localizedMonth, localizedWeekday, parseLocalDate } from './dateMath'
 import { uiText } from './localization'
 import { QuickAdd, type QuickAddState } from './QuickAdd'
@@ -46,7 +46,7 @@ function isoDay(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
-type AgendaFilterPanel = 'sources' | 'groups' | 'noteDates'
+type AgendaFilterPanel = 'sources' | 'noteDates'
 
 export function AgendaPanel(): ReactElement {
   const today = new Date()
@@ -54,7 +54,7 @@ export function AgendaPanel(): ReactElement {
   const [tc, patch] = useTimeControl()
   useCalendarSurface('left_sidebar', tc)
   const { items, sourceOptions, groupCounts, colorFor, documentErrors } = useCalendarItems({ focusYear: Number((tc.selectedDate ?? tc.cursor).slice(0, 4)) })
-  const { groups: calendarGroups, hiddenGroups, hiddenSources } = useCalendarSettings()
+  const { groups: calendarGroups, hiddenSources, noteDatesEnabled } = useCalendarSettings()
   const bodyRef = React.useRef<HTMLDivElement>(null)
   const revealStore = revealTargetStore()
   const revealTarget = React.useSyncExternalStore(
@@ -260,10 +260,12 @@ export function AgendaPanel(): ReactElement {
     glideToDay(todayKey)
   }
 
+  // The open Note dates list takes the whole sidebar below the segments, like Map's Map pins tab.
+  const openPanel = filterPanel === 'noteDates' && !noteDatesEnabled ? null : filterPanel
+  const noteDatesOpen = openPanel === 'noteDates'
   const filterSegments: { id: AgendaFilterPanel; label: string; icon: ReactElement; filtered: boolean }[] = [
     { id: 'sources', label: uiText('calendar.filter.sources'), icon: <Layers />, filtered: sourceOptions.some((source) => hiddenSources.includes(source.id)) },
-    { id: 'groups', label: uiText('calendar.filter.groups'), icon: <GroupGlyph />, filtered: calendarGroups.some((group) => hiddenGroups.includes(group.id)) },
-    { id: 'noteDates', label: uiText('calendar.filter.noteDates'), icon: <PushPin />, filtered: noteDateSources.some((source) => !source.hidden && !source.visible) }
+    ...(noteDatesEnabled ? [{ id: 'noteDates' as const, label: uiText('calendar.filter.noteDates'), icon: <PushPin />, filtered: noteDateSources.some((source) => !source.hidden && !source.visible) }] : [])
   ]
 
   const openItemMenu = async (item: CalItem, e: React.MouseEvent): Promise<void> => {
@@ -296,32 +298,25 @@ export function AgendaPanel(): ReactElement {
           <button
             key={id}
             type="button"
-            className={`agenda-filter-seg${filterPanel === id ? ' active' : ''}${filtered ? ' filtered' : ''}`}
-            aria-pressed={filterPanel === id}
+            className={`agenda-filter-seg${openPanel === id ? ' active' : ''}${filtered ? ' filtered' : ''}`}
+            aria-pressed={openPanel === id}
             aria-label={label}
             title={label}
             onClick={() => setFilterPanel((open) => open === id ? null : id)}
           >{icon}</button>
         ))}
       </div>
-      {filterPanel && <div className={`agenda-filter-panel agenda-filter-panel-${filterPanel}`}>
-        {filterPanel === 'sources' && <CalendarFilterList
+      {openPanel && <div className={`agenda-filter-panel agenda-filter-panel-${openPanel}`}>
+        {openPanel === 'sources' && <CalendarFilterList
           label={uiText('calendar.filter.sources')}
           options={sourceOptions.map((source) => ({ ...source, color: 'palette:primary-blue' }))}
           hidden={hiddenSources}
           settingsKey={HIDDEN_SOURCES_KEY}
           emptyText={uiText('calendar.filter.noSources')}
         />}
-        {filterPanel === 'groups' && <CalendarFilterList
-          label={uiText('calendar.filter.groups')}
-          options={calendarGroups.map((group) => ({ id: group.id, label: group.name, color: group.color, count: groupCounts[group.id] ?? 0, sub: group.parent !== undefined }))}
-          hidden={hiddenGroups}
-          settingsKey={HIDDEN_GROUPS_KEY}
-          emptyText={uiText('calendar.filter.noGroups')}
-          onOpenSettings={() => api.workspace.openOwnSettings()}
-        />}
-        {filterPanel === 'noteDates' && <NoteDateSourceFilterList />}
+        {noteDatesOpen && <NoteDateSourceFilterList />}
       </div>}
+      <div className="agenda-main" hidden={noteDatesOpen}>
       <div className="search-field-row">
         <div className="agenda-search search-field">
           <Search className="search-field-icon" />
@@ -338,6 +333,7 @@ export function AgendaPanel(): ReactElement {
           {search && <button className="search-field-action" type="button" onClick={() => setSearch('')} aria-label={uiText('calendar.agenda.clearSearch')}><X /></button>}
         </div>
       </div>
+      <GroupsSection groups={calendarGroups} counts={groupCounts} />
       {/* Development-only source diagnostics:
       {sourceErrors.map(error => <div key={error.owner} className="agenda-day-empty" role="status">{error.message}</div>)} */}
       <div className="panel-body agenda-body hidescrollbar" ref={bodyRef}>
@@ -401,6 +397,7 @@ export function AgendaPanel(): ReactElement {
             )
           })}</div>
         )}
+      </div>
       </div>
       {quickAdd && <QuickAdd
         key={`${quickAdd.editItem?.sourceId ?? quickAdd.editItem?.kind}:${quickAdd.editItem?.id}`}
