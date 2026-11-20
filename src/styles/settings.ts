@@ -208,13 +208,13 @@ export const noteDateStyles = `/* ── Note-date sources (Settings → Calenda
 /* A timed entry: dot, start day and time; a line with the duration; dot, end day and time. */
 .calendar-item-timeline { display:flex; flex-direction:column; margin:2px 0; padding:0; list-style:none; color:var(--text-color); font-size:var(--small-font-size); }
 .calendar-item-timeline-point { display:grid; grid-template-columns:14px 1fr auto; align-items:center; gap:8px; min-height:20px; }
-.calendar-item-timeline-dot { justify-self:center; width:9px; height:9px; border-radius:50%; background:var(--accent-color); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent-color) 20%, transparent); }
+.calendar-item-timeline-dot { justify-self:center; width:9px; height:9px; border-radius:50%; background:var(--accent-color); }
 .calendar-item-timeline-day { min-width:0; color:var(--text-secondary); overflow-wrap:anywhere; }
 .calendar-item-timeline-time { font-weight:var(--font-semi-bold, 600); font-variant-numeric:tabular-nums; }
 .calendar-item-timeline-span { display:grid; grid-template-columns:14px 1fr; align-items:center; gap:8px; min-height:22px; }
 .calendar-item-timeline-line { justify-self:center; align-self:stretch; width:2px; border-radius:1px; background:color-mix(in srgb, var(--accent-color) 45%, transparent); }
 .calendar-item-timeline-duration { color:var(--text-tertiary); font-size:var(--smaller-font-size); font-variant-numeric:tabular-nums; }
-.calendar-item-timeline.is-overdue .calendar-item-timeline-dot { background:var(--negative-color); box-shadow:0 0 0 3px color-mix(in srgb, var(--negative-color) 20%, transparent); }
+.calendar-item-timeline.is-overdue .calendar-item-timeline-dot { background:var(--negative-color); }
 .calendar-item-timeline.is-overdue .calendar-item-timeline-line { background:color-mix(in srgb, var(--negative-color) 45%, transparent); }
 .calendar-item-timeline.is-overdue .calendar-item-timeline-time { color:var(--negative-color); }
 .calendar-item-missing p { margin:0; color:var(--text-secondary); font-size:var(--small-font-size); }

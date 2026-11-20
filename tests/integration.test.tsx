@@ -2702,6 +2702,23 @@ describe('Calendar right-sidebar entry card', () => {
     expect(screen.getByText('© OpenStreetMap contributors')).toBeInTheDocument()
   })
 
+  it('draws an all-day entry as the same timeline, All day at its start and its days on the line', async () => {
+    const mock = setupCalendarApi({ events: [
+      { id: 'trip', title: 'Wetland monitoring', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-08', endDate: '2026-06-10' } as DataRecord,
+      { id: 'day', title: 'Field day', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-12' } as DataRecord
+    ] })
+    const multi = card(mock, { itemId: 'trip', kind: 'event', date: '2026-06-08', sourceId: '', filePath: '' })
+    await waitFor(() => expect(multi.container.querySelector('.calendar-item-card h2')).toHaveTextContent('Wetland monitoring'))
+    const points = [...multi.container.querySelectorAll('.calendar-item-timeline-point')]
+    expect(points.map((point) => point.querySelector('.calendar-item-timeline-time')?.textContent)).toEqual(['All day', ''])
+    expect(multi.container.querySelector('.calendar-item-timeline-duration')).toHaveTextContent('3 d')
+    multi.unmount()
+    const single = card(mock, { itemId: 'day', kind: 'event', date: '2026-06-12', sourceId: '', filePath: '' })
+    await waitFor(() => expect(single.container.querySelector('.calendar-item-card h2')).toHaveTextContent('Field day'))
+    expect(single.container.querySelectorAll('.calendar-item-timeline-point')).toHaveLength(1)
+    expect(single.container.querySelector('.calendar-item-timeline-span')).toBeNull()
+  })
+
   it('says an entry that is gone is gone instead of showing an error', async () => {
     const mock = setupCalendarApi()
     const { container } = card(mock, { itemId: 'notedate:x:Missing.md:2026-06-08', kind: 'noteDate', date: '2026-06-08', sourceId: '', filePath: 'Missing.md' })

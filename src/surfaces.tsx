@@ -17,7 +17,7 @@ import { paletteCssValue } from '@valley/plugin-sdk/palette'
 import { parseAppOpenUrl } from '@valley/plugin-sdk/paths'
 import { AttachmentCard, openLocation } from './fields'
 import { formatReminderTime } from './ReminderOffsets'
-import { Bell, ChevronDown, Clock, Flag, Link, TableGlyph } from './icons'
+import { Bell, ChevronDown, Flag, Link, TableGlyph } from './icons'
 import { ItemLocation } from './LocationMap'
 import { registerCalendarDetails } from './details'
 import { addDays, isoDay, isoWeek, localizedMonth, parseLocalDate, startOfWeek } from './dateMath'
@@ -385,15 +385,27 @@ function durationLabel(startDay: string, start: string, endDay: string, end: str
   return [days ? uiText('calendar.card.days', { count: days }) : '', hours ? uiText('calendar.card.hours', { count: hours }) : '', rest ? uiText('calendar.card.minutes', { count: rest }) : ''].filter(Boolean).join(' ')
 }
 
-/** A timed entry (18 Nov): a dot with the start day and time, a line with the duration, a dot with the end day and time. */
+/** Inclusive day count of an all-day span ("3 d" for 29 Sep – 1 Oct). */
+function spanDays(startDay: string, endDay: string): number {
+  return Math.round((parseLocalDate(endDay).getTime() - parseLocalDate(startDay).getTime()) / 86400000) + 1
+}
+
+/**
+ * When an entry happens (18 Nov; all-day entries 20 Nov): a dot with the start
+ * day and time, a line with the duration, a dot with the end day and time. An
+ * all-day entry reads All day at its start and counts its days on the line; a
+ * one-day entry is one dot.
+ */
 function ItemTimeline({ item, endDay, overdue }: { item: CalItem; endDay: string; overdue: boolean }): React.ReactElement {
-  const start = item.startTime ?? ''
-  const end = item.endTime ?? ''
-  const duration = end ? durationLabel(item.date, start, endDay, end) : ''
-  return <ol className={`calendar-item-timeline${overdue ? ' is-overdue' : ''}`} aria-label={uiText('calendar.card.when')}>
+  const allDay = !item.startTime
+  const start = allDay ? uiText('calendar.card.allDay') : item.startTime ?? ''
+  const end = allDay ? '' : item.endTime ?? ''
+  const hasEnd = allDay ? endDay > item.date : !!end
+  const duration = !hasEnd ? '' : allDay ? uiText('calendar.card.days', { count: spanDays(item.date, endDay) }) : durationLabel(item.date, start, endDay, end)
+  return <ol className={`calendar-item-timeline${overdue ? ' is-overdue' : ''}${allDay ? ' is-all-day' : ''}`} aria-label={uiText('calendar.card.when')}>
     <li className="calendar-item-timeline-point"><span className="calendar-item-timeline-dot" aria-hidden="true" /><span className="calendar-item-timeline-day">{dayLabel(item.date)}</span><span className="calendar-item-timeline-time">{start}</span></li>
-    {end && <li className="calendar-item-timeline-span" aria-hidden={!duration}><span className="calendar-item-timeline-line" aria-hidden="true" />{duration && <span className="calendar-item-timeline-duration">{duration}</span>}</li>}
-    {end && <li className="calendar-item-timeline-point"><span className="calendar-item-timeline-dot" aria-hidden="true" /><span className="calendar-item-timeline-day">{dayLabel(endDay)}</span><span className="calendar-item-timeline-time">{end}</span></li>}
+    {hasEnd && <li className="calendar-item-timeline-span" aria-hidden={!duration}><span className="calendar-item-timeline-line" aria-hidden="true" />{duration && <span className="calendar-item-timeline-duration">{duration}</span>}</li>}
+    {hasEnd && <li className="calendar-item-timeline-point"><span className="calendar-item-timeline-dot" aria-hidden="true" /><span className="calendar-item-timeline-day">{dayLabel(endDay)}</span><span className="calendar-item-timeline-time">{end}</span></li>}
   </ol>
 }
 
@@ -413,9 +425,6 @@ function ItemCard({ item }: { item: CalItem }): React.ReactElement {
   const group = groupOfItem(item, groups)
   const parent = group?.parent ? groups.find((entry) => entry.id === group.parent) : undefined
   const endDay = item.event?.endDate ?? item.endDate
-  const days = endDay && endDay !== item.date ? `${dayLabel(item.date)} – ${dayLabel(endDay)}` : dayLabel(item.date)
-  const timed = Boolean(item.startTime)
-  const when = `${days} · ${uiText('calendar.card.allDay')}`
   const today = isoDay(new Date())
   const overdue = item.kind === 'sourced' && !item.completed && (endDay ?? item.date) < today
   const offsets = item.event?.reminderOffsets
@@ -423,13 +432,13 @@ function ItemCard({ item }: { item: CalItem }): React.ReactElement {
   const provider = item.sourceOwner ? providers.find((entry) => entry.owner === item.sourceOwner) : undefined
   const source = item.kind === 'noteDate' ? uiText('calendar.filter.noteDates')
     : item.kind === 'sourced' ? provider?.integration?.localized?.[api.ui.language()]?.name ?? provider?.integration?.name ?? item.sourceOwner ?? ''
-    : item.kind === 'file' ? item.filePath?.split('/').pop() ?? ''
+    : item.kind === 'file' ? ''
     : uiText('calendar.filter.events')
   const files = [item.filePath, ...(item.attachments ?? [])].filter((path, index, all): path is string => !!path && all.indexOf(path) === index)
   return <div className="calendar-properties-frame" data-plugin-widget-layout="fill"><api.ui.ScrollPanel fill>
     <div className="right-panel-body calendar-item-card" data-calendar-item-id={item.id}>
       <h2 className={`calendar-item-title${item.completed ? ' is-done' : ''}`}>{item.title}</h2>
-      {timed ? <ItemTimeline item={item} endDay={endDay ?? item.date} overdue={overdue} /> : <div className={`calendar-item-line${overdue ? ' is-overdue' : ''}`}><Clock /><span>{when}</span></div>}
+      <ItemTimeline item={item} endDay={endDay ?? item.date} overdue={overdue} />
       {reminder && <div className="calendar-item-line"><Bell /><span>{reminder}</span></div>}
       {item.note?.trim() && <p className="calendar-item-note">{item.note.trim()}</p>}
       <div className="calendar-item-facts">
