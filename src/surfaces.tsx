@@ -174,6 +174,8 @@ interface CalendarSurfaces {
   time: TimeControlState
   views: Map<SlotId, TimeControlState['view']>
   selected: Map<SlotId, CalItem>
+  /** The surface whose entry was clicked last: the Properties card shows that entry wherever it was clicked (21 Nov). */
+  lastSelected?: SlotId
   navigation: Map<SlotId, MainWorkspaceNavigationController>
   listeners: Set<() => void>
 }
@@ -185,8 +187,8 @@ function state(): CalendarSurfaces {
 function notify(): void { for (const listener of state().listeners) listener() }
 
 export function selectCalendarProperties(item: CalItem | null, surface: SlotId): void {
-  if (item) state().selected.set(surface, item)
-  else state().selected.delete(surface)
+  if (item) { state().selected.set(surface, item); state().lastSelected = surface }
+  else { state().selected.delete(surface); if (state().lastSelected === surface) state().lastSelected = undefined }
   notify()
 }
 
@@ -463,7 +465,17 @@ function ItemCard({ item }: { item: CalItem }): React.ReactElement {
 
 const PRIORITY_KEYS: Record<string, string> = { low: 'calendar.priority.low', medium: 'calendar.priority.medium', high: 'calendar.priority.high' }
 
-function Properties({ item, view }: { item?: PluginLinkState; view?: PluginLinkState }): React.ReactElement {
+/** The entry clicked last on any Calendar surface: the Agenda and the right-sidebar calendar select outside the main page's subject. */
+function useLastSelection(subjectItem?: PluginLinkState): PluginLinkState | undefined {
+  const [, update] = React.useReducer((n: number) => n + 1, 0)
+  React.useEffect(() => { const listeners = state().listeners; listeners.add(update); return () => { listeners.delete(update) } }, [])
+  const surface = state().lastSelected
+  const entry = surface && surface !== 'main_workspace' ? state().selected.get(surface) : undefined
+  return React.useMemo(() => entry && surface ? itemState(entry, surface) : subjectItem, [entry, surface, subjectItem])
+}
+
+function Properties({ item: subjectItem, view }: { item?: PluginLinkState; view?: PluginLinkState }): React.ReactElement {
+  const item = useLastSelection(subjectItem)
   const [selected, setSelected] = React.useState<CalItem | null>(null)
   const [resolved, setResolved] = React.useState(false)
   const [error, setError] = React.useState('')

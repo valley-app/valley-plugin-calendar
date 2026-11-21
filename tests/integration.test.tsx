@@ -2719,6 +2719,19 @@ describe('Calendar right-sidebar entry card', () => {
     expect(single.container.querySelector('.calendar-item-timeline-span')).toBeNull()
   })
 
+  it('shows the entry clicked in the Agenda although the page selected none', async () => {
+    const mock = setupCalendarApi({ events: [{ id: 'walk', title: 'Survey walk', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z', date: '2026-06-08', startTime: '09:00', endTime: '10:30' } as DataRecord] })
+    const segment = mock.api.interop.extensions.providers(METADATA_PANEL_SEGMENT_V1).find((entry) => entry.extension.id === 'calendar.properties')!.extension
+    let container!: HTMLElement
+    await act(async () => { container = render(React.createElement(React.Fragment, null, segment.render({ relPath: '', kind: 'unsupported', subject: { pluginId: 'calendar', surface: 'main_workspace', view: {} } } as never))).container })
+    expect(container.querySelector('.calendar-item-card')).toBeNull()
+    const { selectCalendarProperties } = await import('../src/surfaces')
+    await act(async () => selectCalendarProperties({ id: 'walk', kind: 'event', title: 'Survey walk', date: '2026-06-08', startTime: '09:00', endTime: '10:30' } as never, 'left_sidebar'))
+    await waitFor(() => expect(container.querySelector('.calendar-item-card h2')).toHaveTextContent('Survey walk'))
+    await act(async () => selectCalendarProperties(null, 'left_sidebar'))
+    await waitFor(() => expect(container.querySelector('.calendar-item-card')).toBeNull())
+  })
+
   it('says an entry that is gone is gone instead of showing an error', async () => {
     const mock = setupCalendarApi()
     const { container } = card(mock, { itemId: 'notedate:x:Missing.md:2026-06-08', kind: 'noteDate', date: '2026-06-08', sourceId: '', filePath: 'Missing.md' })
