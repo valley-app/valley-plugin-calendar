@@ -19,6 +19,17 @@ export function PluginGlyph({ owner }: { owner: string }): ReactElement {
     : <span className="calendar-chip-glyph" aria-hidden="true"><CalendarDays /></span>
 }
 
+const SVG_ICON = /^data:image\/svg\+xml[;,]/
+
+/** A provider's own glyph for one item (an SVG data URI, drawn as a mask in the chip colour), else its plugin icon (23 Nov). */
+export function SourcedGlyph({ owner, icon }: { owner: string; icon?: string }): ReactElement {
+  if (icon && SVG_ICON.test(icon) && icon.length <= 64_000) {
+    const mask = `url("${icon.replace(/"/g, '%22')}") center / contain no-repeat`
+    return <span className="calendar-chip-glyph" aria-hidden="true"><span className="calendar-chip-mask" style={{ mask, WebkitMask: mask }} /></span>
+  }
+  return <PluginGlyph owner={owner} />
+}
+
 export function CalendarPreview({ value, sourcePath, plain = false }: { value: string; sourcePath?: string; plain?: boolean }): ReactElement {
   const cache = api.runtime.getOrCreate('calendar.markdownCache', () => new Map<string, Promise<string>>())
   const [html, setHtml] = React.useState('')

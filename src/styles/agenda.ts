@@ -183,6 +183,7 @@ button.agenda-card-location:hover { color: var(--accent-color); }
 .agenda-card-note img { max-width: 100%; }
 .calendar-chip-glyph { display: inline-flex; width: 1em; height: 1em; flex-shrink: 0; }
 .calendar-chip-glyph svg { width: 100%; height: 100%; }
+.calendar-chip-mask { display: block; width: 100%; height: 100%; background-color: currentColor; }
 /* The Calendar page as a table (18 Nov, like To-Do's main table): sticky 37px + 1px header, 37px rows. */
 .calendar-scroll-area[data-view='table'] { overflow:hidden; container-type:inline-size; }
 .calendar-table-scroll { flex:1 1 auto; min-height:0; overflow:auto; outline:none; }

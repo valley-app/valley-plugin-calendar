@@ -1,4 +1,4 @@
-import { PluginGlyph } from './CalendarPreview'
+import { SourcedGlyph } from './CalendarPreview'
 import { CalendarCompletion } from './items'
 import { React, api } from './runtime'
 import type { ReactElement } from 'react'
@@ -372,7 +372,7 @@ export function WeekGrid({
                     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onItemAction?.(it, e) }}
                   >
                     <CalendarCompletion item={it} />
-          {!(it.kind === 'sourced' && typeof it.completed === 'boolean') && (it.sourceOwner ? <PluginGlyph owner={it.sourceOwner} /> : it.icon && <NoteDateGlyph id={it.icon} className="calendar-chip-glyph" />)}
+          {!(it.kind === 'sourced' && typeof it.completed === 'boolean') && (it.sourceOwner ? <SourcedGlyph owner={it.sourceOwner} icon={it.icon} /> : it.icon && <NoteDateGlyph id={it.icon} className="calendar-chip-glyph" />)}
                     <span className="calendar-chip-title">{it.title}</span>
                     <ItemBadges badges={it.badges} />
                   </div>
@@ -466,7 +466,7 @@ export function WeekGrid({
                     <span className="calendar-weekgrid-block-time">{minutesToTime(startMin)}{it.timeZone && it.timeZone !== 'floating' ? ` ${it.timeZone}` : ''}</span>
                     <span className="calendar-weekgrid-block-title">
                       <CalendarCompletion item={it} />
-          {!(it.kind === 'sourced' && typeof it.completed === 'boolean') && (it.sourceOwner ? <PluginGlyph owner={it.sourceOwner} /> : it.icon && <NoteDateGlyph id={it.icon} className="calendar-chip-glyph" />)}
+          {!(it.kind === 'sourced' && typeof it.completed === 'boolean') && (it.sourceOwner ? <SourcedGlyph owner={it.sourceOwner} icon={it.icon} /> : it.icon && <NoteDateGlyph id={it.icon} className="calendar-chip-glyph" />)}
                       <span className="calendar-weekgrid-block-name">{it.title}</span>
                       <ItemBadges badges={it.badges} />
                     </span>

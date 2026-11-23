@@ -1,5 +1,5 @@
 import { saveCalendarFile } from './calendarFiles'
-import { CalendarPreview, PluginGlyph } from './CalendarPreview'
+import { CalendarPreview, PluginGlyph, SourcedGlyph } from './CalendarPreview'
 import { React, api, revealCalendarAgendaItem, revealCalendarItem, type CalendarSelectionOrigin } from './runtime'
 import type { ReactElement } from 'react'
 import type { EventRecord } from '@valley/plugin-sdk/types'
@@ -333,7 +333,7 @@ export function CalendarAgendaCard({
       <span className="agenda-card-leading" style={{ color: paletteCssValue(color) }}>
         {item.kind === 'sourced' && typeof item.completed === 'boolean'
           ? <CalendarCompletion item={item} />
-          : <span className="agenda-card-icon"><PluginGlyph owner={item.sourceOwner ?? 'calendar'} /></span>}
+          : <span className="agenda-card-icon"><SourcedGlyph owner={item.sourceOwner ?? 'calendar'} icon={item.kind === 'sourced' ? item.icon : undefined} /></span>}
       </span>
       <span className="agenda-card-body">
         <span className="agenda-card-title">{item.title}</span>
