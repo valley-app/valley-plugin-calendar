@@ -20,7 +20,7 @@ import {
 import { createMockValleyApi, type MockValleyApi } from './harness'
 import { pagedSource } from './harness'
 import { initRuntime, revealTargetStore } from '../src/runtime'
-import { normalizeEventRecord, newEvent } from '../src/events'
+import { loadEvents, normalizeEventRecord, newEvent } from '../src/events'
 import { resolveItemColor } from '../src/colors'
 import { SWIPE_IDLE_MS, calendarSwipeStep, newSwipeGesture, type CalendarSwipeGesture } from '../src/swipe'
 import { Calendar } from '../src/Calendar'
@@ -2798,4 +2798,99 @@ describe('Calendar table view', () => {
     await waitFor(() => expect(container.querySelector('.calendar-table')).toBeNull())
   })
 })
+
+describe('Calendar QuickAdd usability', () => {
+  it('uses wheel pickers for starts and ends, omits Custom reminders, and exposes group, subgroup and location immediately', async () => {
+    const groups = [
+      { id: 'personal', name: 'Personal', color: paletteRef('pink') },
+      { id: 'health', name: 'Health', color: paletteRef('blue'), parent: 'personal' },
+      { id: 'work', name: 'Work', color: paletteRef('green') }
+    ]
+    const mock = setupCalendarApi({ groups })
+    const datePickers: string[] = []
+    const timePickers: string[] = []
+    const openedMenus: UiMenuItem[][] = []
+    const OriginalDateField = mock.api.ui.settings.DateField
+    const OriginalTimeField = mock.api.ui.settings.TimeField
+    mock.api.ui.settings.DateField = ((props: React.ComponentProps<typeof OriginalDateField>) => {
+      if (props.picker) datePickers.push(props.picker)
+      return React.createElement(OriginalDateField, props)
+    }) as typeof OriginalDateField
+    mock.api.ui.settings.TimeField = ((props: React.ComponentProps<typeof OriginalTimeField>) => {
+      if (props.picker) timePickers.push(props.picker)
+      return React.createElement(OriginalTimeField, props)
+    }) as typeof OriginalTimeField
+    mock.api.ui.openMenu = vi.fn(async (items: UiMenuItem[]) => {
+      openedMenus.push(items)
+      return null
+    })
+
+    const close = vi.fn()
+    render(React.createElement(QuickAdd, {
+      state: { date: '2026-12-04', startTime: '09:00', endTime: '10:00' },
+      groups,
+      onClose: close,
+      onAdded: vi.fn()
+    }))
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Title' })).toBeInTheDocument())
+    expect(datePickers).toContain('wheel')
+    expect(datePickers.every((design) => design === 'wheel')).toBe(true)
+    expect(timePickers).toContain('wheel')
+    expect(timePickers.every((design) => design === 'wheel')).toBe(true)
+    expect(screen.queryByRole('combobox', { name: 'Reminders' })).toBeNull()
+    expect(screen.queryByText('Custom')).toBeNull()
+
+    // One single Group button + Location are visible without expanding Details.
+    const groupButton = screen.getByRole('combobox', { name: 'Calendar group' })
+    const locationInput = screen.getByRole('combobox', { name: 'Location' }) as HTMLInputElement
+    expect(groupButton).toBeVisible()
+    expect(groupButton).toHaveTextContent('No group')
+    expect(screen.queryByRole('combobox', { name: 'Subgroup' })).toBeNull()
+    expect(locationInput).toBeVisible()
+
+    // Clicking the Group button opens one menu where groups with subgroups carry a submenu AND remain directly clickable.
+    await act(async () => { fireEvent.click(groupButton) })
+    const menu = openedMenus.at(-1)!
+    expect(menu.map((item) => item.label)).toEqual(['No group', 'Personal', 'Work'])
+    const personalItem = menu.find((item) => item.label === 'Personal')!
+    const workItem = menu.find((item) => item.label === 'Work')!
+    expect(workItem.submenu).toBeUndefined()
+    expect(personalItem.submenu?.map((item) => item.label)).toEqual(['Health'])
+
+    // Clicking the main group selects Personal directly.
+    act(() => { personalItem.onSelect?.({ newTab: false }) })
+    expect(groupButton).toHaveTextContent('Personal')
+
+    // Picking a subgroup from Personal's submenu selects Health and shows Personal · Health.
+    act(() => { personalItem.submenu![0].onSelect?.({ newTab: false }) })
+    expect(groupButton).toHaveTextContent('Personal · Health')
+
+    // Searching and picking a location stays open (never vanishes) and saves coordinates.
+    mock.api.resources.search = vi.fn(async () => [
+      { id: 'zurich', kind: 'place', label: 'Zurich Clinic', value: 'Zurich Clinic', description: 'Zurich, Switzerland', metadata: { latitude: 47.3769, longitude: 8.5417 } }
+    ])
+    fireEvent.change(screen.getByRole('textbox', { name: 'Title' }), { target: { value: 'therapy' } })
+    fireEvent.focus(locationInput)
+    fireEvent.change(locationInput, { target: { value: 'Zurich' } })
+    const option = await screen.findByRole('button', { name: /Zurich Clinic/ })
+    fireEvent.mouseDown(option)
+    fireEvent.click(option)
+
+    expect(close).not.toHaveBeenCalled()
+    expect(locationInput.value).toBe('Zurich Clinic')
+    expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument()
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add' })) })
+    await waitFor(() => expect(close).toHaveBeenCalled())
+    const saved = await loadEvents()
+    expect(saved).toHaveLength(1)
+    expect(saved[0]).toMatchObject({
+      title: 'therapy',
+      groupId: 'health',
+      location: { name: 'Zurich Clinic', lat: 47.3769, lng: 8.5417 }
+    })
+  })
+})
+
 

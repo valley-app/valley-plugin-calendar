@@ -244,21 +244,40 @@ export const eventEditorStyles = `/* ── Calendar editor modal ────�
 .calendar-field-btn:hover { background: var(--hover-bg); color: var(--title-color); }
 .calendar-field-btn svg { width: 13px; height: 13px; }
 
-/* Location: the query field, its two actions, and the geocoder's hits below.
-   Ported from the Todo detail view — a plugin may not import another plugin, so
-   the class names travel with the markup and the rules are restated here. */
-.calendar-location { position: relative; display: flex; flex-direction: column; gap: var(--space-2); }
-.calendar-location-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.calendar-location-input { flex: 1; min-width: 0; }
+/* Location: the query field, its two actions, and the geocoder's hits below. */
+.calendar-location { position: relative; display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.calendar-location-row { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.calendar-location-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  height: var(--control-min-height, 28px);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--body-color);
+  color: var(--title-color);
+  font-family: var(--interface-font);
+  font-size: var(--small-font-size);
+}
+.calendar-location-input:focus { outline: none; border-color: var(--accent-color); }
+.calendar-location-input::placeholder { color: var(--text-tertiary); }
 .calendar-location-hits {
   display: flex;
   flex-direction: column;
+  max-height: 180px;
+  overflow-y: auto;
   margin: 0;
   padding: var(--space-1);
   list-style: none;
   border: 1px solid var(--border-medium);
   border-radius: var(--radius);
   background: var(--container-color);
+}
+.calendar-location-status {
+  padding: 5px var(--space-2);
+  color: var(--text-tertiary);
+  font-size: var(--smaller-font-size);
 }
 .calendar-location-hit {
   display: flex;
@@ -275,8 +294,16 @@ export const eventEditorStyles = `/* ── Calendar editor modal ────�
   text-align: left;
   cursor: pointer;
 }
-.calendar-location-hit:hover { background: var(--hover-bg); }
-.calendar-location-hit-name { color: var(--title-color); font-weight: var(--font-medium); }
+.calendar-location-hit:hover,
+.calendar-location-hit.is-active { background: var(--hover-bg); }
+.calendar-location-hit-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--title-color);
+  font-weight: var(--font-medium);
+}
+.calendar-location-hit-name svg { width: 12px; height: 12px; flex: none; color: var(--text-tertiary); }
 .calendar-location-hit-context { color: var(--text-tertiary); font-size: var(--smaller-font-size); }
 
 /* One attachment, as a card. Same shape as the Todo detail view's, minus the
@@ -340,8 +367,53 @@ export const eventEditorStyles = `/* ── Calendar editor modal ────�
 .calendar-attach-remove:hover { color: var(--negative-color); border-color: var(--negative-color); }
 .calendar-attach-remove svg { width: 12px; height: 12px; }
 
-.calendar-editor-popover { width: 340px; max-width: calc(100vw - 16px); padding: 0; }
+.calendar-editor-popover { width: 360px; max-width: calc(100vw - 16px); padding: 0; }
 .calendar-quickadd { width: 100%; }
+.calendar-quickadd-group-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-min-height, 28px);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--body-color);
+  color: var(--title-color);
+  font-family: var(--interface-font);
+  font-size: var(--small-font-size);
+  text-align: left;
+  cursor: pointer;
+}
+.calendar-quickadd-group-btn:hover:not(:disabled) { border-color: var(--border-strong, var(--border-medium)); }
+.calendar-quickadd-group-btn:focus-visible,
+.calendar-quickadd-group-btn[data-open='true'] { outline: none; border-color: var(--accent-color); }
+.calendar-quickadd-group-btn:disabled { opacity: 0.55; cursor: default; }
+.calendar-quickadd-group-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dot-color, var(--text-tertiary));
+}
+.calendar-quickadd-group-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-quickadd-group-parent { color: var(--text-secondary); }
+.calendar-quickadd-group-caret {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--text-tertiary);
+  transition: transform var(--duration-fast, 120ms) var(--ease-out, ease);
+}
+.calendar-quickadd-group-btn[data-open='true'] .calendar-quickadd-group-caret { transform: rotate(180deg); }
 .calendar-quickadd-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px; border-top: 1px solid var(--border-light); }
 .calendar-quickadd-title,
 .calendar-quickadd-title:focus { background: transparent; border: none; outline: none; box-shadow: none; font-size: 1rem; line-height: 1.4; padding: 4px 0; }

@@ -474,5 +474,11 @@
   "calendar.table.group": "分组",
   "calendar.table.source": "来源",
   "calendar.table.place": "地点",
-  "calendar.table.note": "备注"
+  "calendar.table.note": "备注",
+  "calendar.quickadd.subgroup": "子分组",
+  "calendar.quickadd.noSubgroup": "无子分组",
+  "calendar.quickadd.noSubgroups": "无子分组",
+  "calendar.location.searching": "正在搜索地点…",
+  "calendar.location.noResults": "未找到地点",
+  "calendar.location.failed": "无法搜索地点"
 }

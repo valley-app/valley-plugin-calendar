@@ -474,5 +474,11 @@
   "calendar.table.group": "Groupe",
   "calendar.table.source": "Source",
   "calendar.table.place": "Lieu",
-  "calendar.table.note": "Notes"
+  "calendar.table.note": "Notes",
+  "calendar.quickadd.subgroup": "Sous-groupe",
+  "calendar.quickadd.noSubgroup": "Aucun sous-groupe",
+  "calendar.quickadd.noSubgroups": "Aucun sous-groupe",
+  "calendar.location.searching": "Recherche de lieux…",
+  "calendar.location.noResults": "Aucun lieu trouvé",
+  "calendar.location.failed": "Impossible de rechercher des lieux"
 }

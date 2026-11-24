@@ -1,8 +1,8 @@
 import { React, api } from './runtime'
 import type { ReactElement } from 'react'
-import type { EventRecord } from '@valley/plugin-sdk/types'
+import type { EventRecord, ResourceSearchResult } from '@valley/plugin-sdk/types'
 import { classifyFilePath, fileExtension, type FileKind } from '@valley/plugin-sdk/fileTypes'
-import { AudioGlyph, FileGlyph, ImageGlyph, Navigation, VideoGlyph, X } from './icons'
+import { AudioGlyph, FileGlyph, ImageGlyph, MapPin, Navigation, VideoGlyph, X } from './icons'
 import { uiText } from './localization'
 
 // ── FilePathInput ─────────────────────────────────────────────────────────────
@@ -145,38 +145,152 @@ export function canOpenLocation(): boolean {
 /**
  * Where the event happens.
  *
- * Typing queries the Map plugin's geocoder through `geo.search` and offers real
- * places; picking one stores its coordinates alongside the label, which is what
- * lets the ➤ open the map *at the pin* rather than re-running a text search.
- * Committing without picking stores the label alone — the field stays fully
- * usable when the Map plugin is disabled and there is no geocoder at all.
+ * Typing queries the Map plugin's geocoder through `api.resources.search` and
+ * offers real places inline inside the popover; picking one stores its
+ * coordinates alongside the label, which is what lets the ➤ open the map *at
+ * the pin* rather than re-running a text search. Typing without picking updates
+ * the label directly so clicking Save always keeps it — even with Map disabled.
+ *
+ * Rendered directly in the plugin document rather than through the host
+ * ResourcePicker widget so typing never suffers bridge round-trip lag and
+ * clicking a suggestion stays inside the popover DOM.
  */
 export const LocationField = ({
   value,
-  onChange
+  onChange,
+  disabled = false
 }: {
   value: EventLocation | undefined
   onChange: (next: EventLocation | undefined) => void
+  disabled?: boolean
 }): ReactElement => {
-  const ResourcePicker = api.ui.ResourcePicker
+  const [text, setText] = React.useState(value?.name ?? '')
+  const [hits, setHits] = React.useState<ResourceSearchResult[]>([])
+  const [status, setStatus] = React.useState<'idle' | 'searching' | 'done' | 'failed'>('idle')
+  const [active, setActive] = React.useState(-1)
+  const [open, setOpen] = React.useState(false)
+  const focused = React.useRef(false)
+  const timer = React.useRef<number | null>(null)
+  const token = React.useRef(0)
+
+  React.useEffect(() => {
+    if (!focused.current) setText(value?.name ?? '')
+  }, [value?.name])
+  React.useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current) }, [])
+
+  const search = (raw: string): void => {
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    const mine = ++token.current
+    const query = raw.trim()
+    if (query.length < 2) {
+      setHits([])
+      setActive(-1)
+      setStatus('idle')
+      setOpen(false)
+      return
+    }
+    setOpen(true)
+    setStatus('searching')
+    timer.current = window.setTimeout(() => {
+      void api.resources.search({ query, kinds: ['place'], limit: 8 }).then(
+        (results) => {
+          if (mine !== token.current) return
+          setHits(results)
+          setActive(results.length ? 0 : -1)
+          setStatus('done')
+        },
+        () => {
+          if (mine !== token.current) return
+          setHits([])
+          setActive(-1)
+          setStatus('failed')
+        }
+      )
+    }, 220)
+  }
+
+  const pick = (hit: ResourceSearchResult): void => {
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    token.current++
+    const longitude = Number(hit.metadata?.longitude)
+    const latitude = Number(hit.metadata?.latitude)
+    const name = (hit.value || hit.label).trim()
+    setText(name)
+    setHits([])
+    setActive(-1)
+    setStatus('idle')
+    setOpen(false)
+    onChange(name ? {
+      name,
+      ...(Number.isFinite(longitude) && Number.isFinite(latitude) ? { lng: longitude, lat: latitude } : {})
+    } : undefined)
+  }
+
+  const clear = (): void => {
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    token.current++
+    setText('')
+    setHits([])
+    setActive(-1)
+    setStatus('idle')
+    setOpen(false)
+    onChange(undefined)
+  }
 
   return (
     <div className="calendar-location">
       <div className="calendar-location-row">
-        <ResourcePicker
+        <input
           className="calendar-location-input"
-          value={value?.name ?? ''}
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-label={uiText('calendar.location')}
           placeholder={uiText('calendar.locationPlaceholder')}
-          ariaLabel={uiText('calendar.location')}
-          kinds={['place']}
-          allowCustom
-          onChange={(name, result) => {
-            const longitude = Number(result?.metadata?.longitude)
-            const latitude = Number(result?.metadata?.latitude)
-            onChange(name ? {
-              name,
-              ...(Number.isFinite(longitude) && Number.isFinite(latitude) ? { lng: longitude, lat: latitude } : {})
-            } : undefined)
+          value={text}
+          disabled={disabled}
+          autoComplete="off"
+          spellCheck={false}
+          onFocus={() => {
+            focused.current = true
+            if (text.trim().length >= 2 && hits.length > 0) setOpen(true)
+          }}
+          onBlur={() => {
+            focused.current = false
+            token.current++
+            setOpen(false)
+            const trimmed = text.trim()
+            if (trimmed !== text) setText(trimmed)
+          }}
+          onChange={(event) => {
+            const next = event.currentTarget.value
+            setText(next)
+            const trimmed = next.trim()
+            if (!trimmed) onChange(undefined)
+            else if (trimmed !== (value?.name ?? '')) onChange({ name: trimmed })
+            search(next)
+          }}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) return
+            if (event.key === 'ArrowDown' && hits.length > 0) {
+              event.preventDefault()
+              setOpen(true)
+              setActive((index) => (index + 1) % hits.length)
+            } else if (event.key === 'ArrowUp' && hits.length > 0) {
+              event.preventDefault()
+              setActive((index) => (index <= 0 ? hits.length - 1 : index - 1))
+            } else if (event.key === 'Enter') {
+              event.preventDefault()
+              event.stopPropagation()
+              if (open && hits[active]) pick(hits[active])
+              else setOpen(false)
+            } else if (event.key === 'Escape' && open) {
+              event.preventDefault()
+              event.stopPropagation()
+              token.current++
+              setOpen(false)
+            }
           }}
         />
         {value && (
@@ -185,8 +299,10 @@ export const LocationField = ({
               <button
                 className="calendar-field-btn"
                 type="button"
+                disabled={disabled}
                 title={uiText('calendar.openLocation')}
                 aria-label={uiText('calendar.openLocationOf', { p0: value.name })}
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={() => openLocation(value)}
               >
                 <Navigation />
@@ -195,18 +311,44 @@ export const LocationField = ({
             <button
               className="calendar-field-btn"
               type="button"
+              disabled={disabled}
               title={uiText('calendar.removeLocation')}
               aria-label={uiText('calendar.removeLocation')}
-              onClick={() => {
-                onChange(undefined)
-              }}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={clear}
             >
               <X />
             </button>
           </>
         )}
       </div>
-
+      {open && (
+        <ul className="calendar-location-hits" role="listbox" aria-label={uiText('calendar.location')}>
+          {status === 'searching' && hits.length === 0 && (
+            <li className="calendar-location-status" role="status">{uiText('calendar.location.searching')}</li>
+          )}
+          {status === 'done' && hits.length === 0 && (
+            <li className="calendar-location-status" role="status">{uiText('calendar.location.noResults')}</li>
+          )}
+          {status === 'failed' && (
+            <li className="calendar-location-status" role="status">{uiText('calendar.location.failed')}</li>
+          )}
+          {hits.map((hit, index) => (
+            <li key={`${hit.kind}:${hit.id}`} role="option" aria-selected={index === active}>
+              <button
+                type="button"
+                className={index === active ? 'calendar-location-hit is-active' : 'calendar-location-hit'}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActive(index)}
+                onClick={() => pick(hit)}
+              >
+                <span className="calendar-location-hit-name"><MapPin /> {hit.label}</span>
+                {hit.description && <span className="calendar-location-hit-context">{hit.description}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }

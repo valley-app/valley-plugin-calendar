@@ -1,9 +1,9 @@
-import { ReminderOffsets } from './ReminderOffsets'
 import { appendCalendarFile, editCalendarFile } from './calendarFiles'
 import { useCalendarFileEditor, type CalendarFileEditor } from './calendarEditor'
 import { React, api } from './runtime'
-import type { ReactElement, ReactNode } from 'react'
+import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import { parseAppOpenUrl } from '@valley/plugin-sdk/paths'
+import { paletteCssValue } from '@valley/plugin-sdk/palette'
 import {
   AttachmentCard,
   FilePathInput,
@@ -12,11 +12,11 @@ import {
 } from './fields'
 import { appendEvent, loadEvents, newEvent, normalizeEventUrl, updateEvent, type DocumentRevision } from './events'
 import { createSourcedItem, creatableSources, updateSourcedItem } from './itemSources'
-import { FileText, Flag, Hash, Link, MapPin, Plus, Tags, X } from './icons'
+import { ChevronDown, FileText, Flag, Hash, Link, MapPin, Plus, Tags, X } from './icons'
 import type { CalItem } from './items'
 import { uiText } from './localization'
 import { useCalendarFileActions, type CalendarFileFormState } from './fileViewCommands'
-import type { MountedPluginView } from '@valley/plugin-sdk'
+import type { MountedPluginView, UiMenuItem } from '@valley/plugin-sdk'
 
 // ── quick-add popover ────────────────────────────────────────────────────────
 //
@@ -111,6 +111,125 @@ function Row({ glyph, children }: { glyph: ReactNode; children: ReactNode }): Re
   )
 }
 
+function menuDot(color: string): ReactElement {
+  return (
+    <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
+      <circle cx="5" cy="5" r="5" style={{ fill: paletteCssValue(color) }} />
+    </svg>
+  )
+}
+
+/**
+ * Single Group button with submenu arrows for groups that have subgroups.
+ * Clicking a main group selects it directly; hovering (or pressing →) opens its
+ * submenu to pick any subgroup.
+ */
+function GroupPicker({
+  value,
+  groups,
+  disabled,
+  onChange
+}: {
+  value: string
+  groups: readonly import('./localGroups').CalendarGroup[]
+  disabled?: boolean
+  onChange: (groupId: string) => void
+}): ReactElement {
+  const buttonRef = React.useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = React.useState(false)
+  const openRef = React.useRef(false)
+  const swallowClick = React.useRef(false)
+
+  const mainGroups = groups.filter((group) => !group.parent || !groups.some((candidate) => candidate.id === group.parent))
+  const selected = groups.find((group) => group.id === value)
+  const parent = selected?.parent ? groups.find((group) => group.id === selected.parent) : undefined
+
+  const openMenu = async (): Promise<void> => {
+    const anchor = buttonRef.current
+    if (!anchor || disabled || openRef.current) return
+    openRef.current = true
+    setOpen(true)
+    const items: UiMenuItem[] = [
+      {
+        id: 'group:none',
+        label: uiText('auto.f6b2246c64fa'),
+        type: 'checkbox',
+        checked: !selected,
+        onSelect: () => onChange('')
+      },
+      ...mainGroups.map((group): UiMenuItem => {
+        const subgroups = groups.filter((candidate) => candidate.parent === group.id)
+        return {
+          id: `group:${group.id}`,
+          label: group.name,
+          icon: menuDot(group.color),
+          type: 'checkbox',
+          checked: selected?.id === group.id,
+          onSelect: () => onChange(group.id),
+          ...(subgroups.length > 0 ? {
+            submenu: subgroups.map((sub): UiMenuItem => ({
+              id: `group:${sub.id}`,
+              label: sub.name,
+              icon: menuDot(sub.color),
+              type: 'checkbox',
+              checked: selected?.id === sub.id,
+              onSelect: () => onChange(sub.id)
+            }))
+          } : {})
+        }
+      })
+    ]
+    try {
+      await api.ui.openMenu(items, { anchor, align: 'start' })
+    } finally {
+      openRef.current = false
+      setOpen(false)
+    }
+  }
+
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      className="calendar-quickadd-group-btn"
+      role="combobox"
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-label={uiText('auto.dbed7864623f')}
+      disabled={disabled}
+      data-open={open ? 'true' : undefined}
+      onMouseDown={() => { swallowClick.current = openRef.current }}
+      onClick={() => {
+        const swallow = swallowClick.current
+        swallowClick.current = false
+        if (!swallow) void openMenu()
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+        event.preventDefault()
+        void openMenu()
+      }}
+    >
+      {selected && (
+        <span
+          className="calendar-quickadd-group-dot"
+          style={{ ['--dot-color' as string]: paletteCssValue(selected.color) } as CSSProperties}
+          aria-hidden="true"
+        />
+      )}
+      <span className="calendar-quickadd-group-label">
+        {selected ? (
+          <>
+            {parent && <span className="calendar-quickadd-group-parent">{parent.name} · </span>}
+            {selected.name}
+          </>
+        ) : uiText('auto.f6b2246c64fa')}
+      </span>
+      <ChevronDown className="calendar-quickadd-group-caret" aria-hidden="true" />
+    </button>
+  )
+}
+
 interface QuickAddProps {
   state: QuickAddState
   groups: import('./localGroups').CalendarGroup[]
@@ -145,7 +264,7 @@ export function QuickAdd(props: QuickAddProps): ReactElement | null {
     void api.ui.openPopover(({ close }) => {
       closePopover = close
       return <QuickAddForm {...current} draftInstance={draftInstance.current} dismissControl={control} onDismiss={finish} onClose={() => { close(); finish() }} />
-    }, target, { width: 340, className: 'calendar-editor-popover', ariaLabel: uiText('calendar.quickadd.kind'), beforeDismiss: () => control.canDismiss() })
+    }, target, { width: 360, className: 'calendar-editor-popover', ariaLabel: uiText('calendar.quickadd.kind'), beforeDismiss: () => control.canDismiss() })
       .then(finish)
     return () => { mounted = false; closePopover?.(); detachDraft?.() }
   }, [])
@@ -188,8 +307,8 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
   const [date, setDate] = useEventField(draftKey, 'date', editing?.file?.date ?? editing?.event?.date ?? editing?.date ?? state.date)
   const [endDate, setEndDate] = useEventField(draftKey, 'endDate', editing?.endDate ?? '')
   const [start, setStart] = useEventField(draftKey, 'start', editing?.startTime ?? state.startTime ?? (state.sourceFilePath?.endsWith('.ifb') ? '09:00' : ''))
-  const [reminderOffsets, setReminderOffsets] = useEventField<number[] | undefined>(draftKey, 'reminderOffsets', editing?.event?.reminderOffsets)
-  const [reminderTime, setReminderTime] = useEventField(draftKey, 'reminderTime', editing?.event?.reminderTime ?? '')
+  const [reminderOffsets] = useEventField<number[] | undefined>(draftKey, 'reminderOffsets', editing?.event?.reminderOffsets)
+  const [reminderTime] = useEventField(draftKey, 'reminderTime', editing?.event?.reminderTime ?? '')
   const [end, setEnd] = useEventField(draftKey, 'end', editing?.endTime ?? state.endTime ?? (state.sourceFilePath?.endsWith('.ifb') ? '10:00' : ''))
   // Always the group's **id**. The two tabs used to store an id and a name in
   // this one slot, so switching tabs left a value that resolved in neither; the
@@ -416,13 +535,9 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
 
   const isEvent = kind === 'event'
   const pickableGroups = isEvent ? groups : groups.filter((g) => !g.local)
-  const kindLabel = (id: string): string =>
-    id === 'event'
-      ? uiText('auto.ad8919ace091')
-      : sources.find((s) => s.id === id)?.label ?? id
   // The host's styled controls — never a raw `<select>` or `<input type="date">`,
   // whose popups Chromium hands to the OS unthemed.
-  const { SelectField, DateField, TimeField, Segmented, Toggle } = api.ui.settings
+  const { DateField, TimeField, Segmented, Toggle } = api.ui.settings
 
   return (
     <api.ui.ScrollPanel
@@ -479,50 +594,56 @@ function QuickAddForm({ state, groups, onClose, onAdded, fileEditor, mountedView
             <div className="calendar-quickadd-schedule-row" data-all-day={allDay}>
               <span>{uiText('calendar.quickadd.starts')}</span>
               <div className="calendar-quickadd-control">
-                <DateField value={date} onChange={setDate} clearable={false}
-                  ariaLabel={isEvent ? uiText('calendar.quickadd.startDate') : uiText('calendar.quickadd.dueDate')} />
+                <DateField
+                  picker="wheel"
+                  value={date}
+                  onChange={(next) => {
+                    setDate(next)
+                    if (endDate && next && next > endDate) setEndDate('')
+                  }}
+                  clearable={false}
+                  ariaLabel={isEvent ? uiText('calendar.quickadd.startDate') : uiText('calendar.quickadd.dueDate')}
+                />
               </div>
               {!allDay && <div className="calendar-quickadd-control">
-                <TimeField value={start} onChange={setStart} ariaLabel={uiText('auto.88d8206d586a')} />
+                <TimeField picker="wheel" value={start} onChange={setStart} ariaLabel={uiText('auto.88d8206d586a')} />
               </div>}
             </div>
             <div className="calendar-quickadd-schedule-row" data-all-day={allDay}>
               <span>{uiText('calendar.quickadd.ends')}</span>
               <div className="calendar-quickadd-control">
-                {isEvent ? <DateField value={endDate || date} onChange={value => setEndDate(value === date ? '' : value)} min={date}
+                {isEvent ? <DateField picker="wheel" value={endDate || date} onChange={value => setEndDate(value === date ? '' : value)} min={date}
                   clearable={false} ariaLabel={uiText('calendar.quickadd.endDate')} />
-                  : <DateField value={date} onChange={setDate} clearable={false} ariaLabel={uiText('calendar.quickadd.dueDate')} />}
+                  : <DateField picker="wheel" value={date} onChange={setDate} clearable={false} ariaLabel={uiText('calendar.quickadd.dueDate')} />}
               </div>
               {!allDay && <div className="calendar-quickadd-control">
-                <TimeField value={end} onChange={setEnd} ariaLabel={uiText('auto.cd7800da7f4f')} />
+                <TimeField picker="wheel" value={end} onChange={setEnd} ariaLabel={uiText('auto.cd7800da7f4f')} />
               </div>}
             </div>
           </div>
 
-          {isEvent && !editing?.file && !state.sourceFilePath && <ReminderOffsets value={reminderOffsets} onChange={setReminderOffsets} timed={Boolean(start)} time={reminderTime} onTimeChange={setReminderTime} />}
+          <div className="calendar-quickadd-section">
+            {pickableGroups.length > 0 && !editing?.file && !state.sourceFilePath && (
+              <Row glyph={<Tags />}>
+                <GroupPicker
+                  value={groupId}
+                  groups={pickableGroups}
+                  disabled={!!editing?.readOnly || frozen}
+                  onChange={setGroupId}
+                />
+              </Row>
+            )}
+            <Row glyph={<MapPin />}>
+              <LocationField value={location} onChange={setLocation} disabled={!!editing?.readOnly || frozen} />
+            </Row>
+          </div>
+
           {editing?.file?.recurring && <Segmented ariaLabel={uiText('calendar.recurrence.series')} value={recurrenceScope} onChange={value => setRecurrenceScope(value as 'occurrence' | 'series')} options={[
             { value: 'occurrence', label: uiText('calendar.recurrence.occurrence') }, { value: 'series', label: uiText('calendar.recurrence.series') }
           ]} />}
           <button className="calendar-quickadd-add" type="button" aria-expanded={details} onClick={() => setDetails(!details)}>{uiText('calendar.quickadd.details')}</button>
           <div hidden={!details}>
           <div className="calendar-quickadd-section">
-            {pickableGroups.length > 0 && !editing?.file && !state.sourceFilePath && (
-              <Row glyph={<Tags />}>
-                <SelectField
-                  className="calendar-quickadd-select"
-                  value={pickableGroups.some((g) => g.id === groupId) ? groupId : ''}
-                  onChange={setGroupId}
-                  ariaLabel={uiText('auto.dbed7864623f')}
-                  options={[
-                    { value: '', label: uiText('auto.f6b2246c64fa') },
-                    ...pickableGroups.map((g) => ({ value: g.id, label: g.name, color: g.color }))
-                  ]}
-                />
-              </Row>
-            )}
-            <Row glyph={<MapPin />}>
-              <LocationField value={location} onChange={setLocation} />
-            </Row>
             <Row glyph={<FileText />}>
               <FilePathInput
                 value={filePath}
